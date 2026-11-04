@@ -4,6 +4,7 @@ import '../services/auth_service.dart';
 import '../models/project.dart';
 import 'project_detail_screen.dart';
 import 'price_settings_screen.dart';
+import 'company_settings_screen.dart';
 import 'employee_list_screen.dart';
 import 'login_screen.dart';
 
@@ -145,6 +146,15 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: () {
                 Navigator.pop(context); // Menüyü kapat
                 Navigator.push(context, MaterialPageRoute(builder: (context) => const PriceSettingsScreen()));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.business),
+              title: const Text("Firma Bilgileri"),
+              subtitle: const Text("Adres, vergi, teklif ayarları"),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const CompanySettingsScreen()));
               },
             ),
             ListTile(

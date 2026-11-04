@@ -6,9 +6,8 @@ import '../models/catalog.dart';
 import '../services/design_api.dart';
 import '../widgets/design_thumbnail.dart';
 import 'design_editor/design_editor_screen.dart';
-import 'cost_summary_screen.dart';
+import 'project_quote_screen.dart';
 import 'project_specs_screen.dart';
-import '../services/pdf_service.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   final int projectId;
@@ -166,24 +165,11 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
-  // 3. PDF Paylaş (Share PDF)
-  // 3. PDF Paylaş (Share PDF)
-  Future<void> _shareAsPdf(Project project) async {
-    // Bekleme göstergesi (SnackBar)
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("PDF Hazırlanıyor..."), duration: Duration(seconds: 1)),
+  void _openQuote() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ProjectQuoteScreen(projectId: widget.projectId)),
     );
-
-    try {
-      final PdfService pdfService = PdfService();
-      await pdfService.generateAndPrintProjectReport(project);
-    } catch (e) {
-      debugPrint("PDF Hatası: $e");
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("PDF oluşturulurken hata oluştu."), backgroundColor: Colors.red),
-      );
-    }
   }
 
   // 4. Yeni Pencere Ekle
@@ -270,9 +256,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               // 1. PDF PAYLAŞ BUTONU (Resimdeki Paylaş butonu yerine)
               IconButton(
                 icon: const Icon(Icons.picture_as_pdf),
-                tooltip: "PDF Paylaş",
-                // Değişiklik burada:
-                onPressed: () => _shareAsPdf(project), 
+                tooltip: 'Teklif / PDF',
+                onPressed: _openQuote,
               ),
               
               // 2. ÜÇ NOKTA MENÜSÜ (Edit Item Specs, Delete Item...)
@@ -280,14 +265,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 onSelected: (value) {
                   if (value == 'edit') _showEditProjectDialog(project);
                   if (value == 'delete') _confirmDelete();
-                  if (value == 'cost') {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => CostSummaryScreen(projectId: project.id),
-                      ),
-                    );
-                  }
+                  if (value == 'cost') _openQuote();
                   if (value == 'sync_prices') _confirmPriceSync();
                   if (value == 'specs') {
                     Navigator.push(context, MaterialPageRoute(builder: (c) => ProjectSpecsScreen(projectId: project.id)));

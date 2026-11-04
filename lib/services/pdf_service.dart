@@ -27,6 +27,25 @@ String formatMoney(num v) {
   return '${buf.toString()},$frac';
 }
 
+/// Miktar: 18,02
+String formatQty(num v) => v.toStringAsFixed(2).replaceAll('.', ',');
+
+String formatUnit(String unit) {
+  final u = unit.trim().toLowerCase();
+  if (u == 'm2' || u == 'm²') return 'm²';
+  if (u == 'm') return 'm';
+  return unit;
+}
+
+String bomGroupTr(String group) => switch (group.trim().toUpperCase()) {
+      'PROFILE' => 'Profil',
+      'BEAD' => 'Çıta',
+      'DUPLEX' => 'Dubleks',
+      'GLASS' => 'Cam',
+      'PANEL' => 'Panel',
+      _ => group,
+    };
+
 String _dateTr(DateTime? d) {
   if (d == null) return '—';
   final dd = d.day.toString().padLeft(2, '0');
@@ -36,29 +55,36 @@ String _dateTr(DateTime? d) {
 
 int expectedQuotePageCount(ProjectQuote q) => 1 + q.windows.length + 1;
 
+SeriesInfo seriesForWindow(CatalogSnapshot catalog, QuoteWindow w) {
+  final name = w.seriesName?.trim();
+  if (name != null && name.isNotEmpty) {
+    for (final s in catalog.series) {
+      if (s.name == name) return s;
+    }
+  }
+  return catalog.seriesFor(w.design.seriesId);
+}
+
 class PdfService {
-  /// Teklif PDF baytlarını üretir. Font verilmezse Roboto (Türkçe) kullanılır.
   Future<Uint8List> buildQuotePdf(
     ProjectQuote q,
     CatalogSnapshot catalog, {
     pw.Font? base,
     pw.Font? bold,
+    bool compress = true,
   }) async {
     final font = base ?? await PdfGoogleFonts.robotoRegular();
     final fontBold = bold ?? await PdfGoogleFonts.robotoBold();
     final theme = pw.ThemeData.withFont(base: font, bold: fontBold);
-    final pdf = pw.Document(theme: theme);
+    final pdf = pw.Document(theme: theme, compress: compress);
     final currency = q.currency;
 
     GlassLook lookOf(String code) => GlassLook.forStyle(catalog.glassByCode(code)?.visualStyle);
 
-    LayoutResult layoutOf(QuoteWindow w) {
-      final series = catalog.seriesFor(w.design.seriesId);
-      return LayoutEngine(series.geometry).run(w.design);
-    }
+    LayoutResult layoutOf(QuoteWindow w) => LayoutEngine(seriesForWindow(catalog, w).geometry).run(w.design);
 
     final widgets = <pw.Widget>[
-      ..._cover(q, catalog, lookOf, layoutOf, currency),
+      ..._cover(q, lookOf, layoutOf, currency),
       for (final w in q.windows) ...[
         pw.NewPage(),
         ..._windowPage(w, lookOf, layoutOf(w), currency),
@@ -105,11 +131,11 @@ class PdfService {
 
   List<pw.Widget> _cover(
     ProjectQuote q,
-    CatalogSnapshot catalog,
     GlassLook Function(String) lookOf,
     LayoutResult Function(QuoteWindow) layoutOf,
     String currency,
   ) {
+    final p = q.project;
     return [
       _companyHeader(q),
       pw.SizedBox(height: 12),
@@ -123,9 +149,10 @@ class PdfService {
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text(q.project.name, style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-                if ((q.project.description ?? '').isNotEmpty)
-                  pw.Text(q.project.description!, style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+                pw.Text(p.name, style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                if ((p.description ?? '').isNotEmpty)
+                  pw.Text(p.description!, style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+                ..._customerBlock(p),
               ],
             ),
           ),
@@ -146,9 +173,31 @@ class PdfService {
       _totalsBlock(q, currency),
       if ((q.company.quoteNote ?? '').trim().isNotEmpty) ...[
         pw.SizedBox(height: 16),
-        pw.Text('Not', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+        pw.Text('Teklif notu', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
         pw.Text(q.company.quoteNote!.trim(), style: const pw.TextStyle(fontSize: 10)),
       ],
+    ];
+  }
+
+  List<pw.Widget> _customerBlock(QuoteProjectInfo p) {
+    final has = [
+      p.customerName,
+      p.customerPhone,
+      p.customerEmail,
+      p.customerAddress,
+    ].any((e) => (e ?? '').trim().isNotEmpty);
+    if (!has) return const [];
+    return [
+      pw.SizedBox(height: 8),
+      pw.Text('Müşteri', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+      if ((p.customerName ?? '').trim().isNotEmpty)
+        pw.Text(p.customerName!.trim(), style: const pw.TextStyle(fontSize: 10)),
+      if ((p.customerPhone ?? '').trim().isNotEmpty)
+        pw.Text('Tel: ${p.customerPhone!.trim()}', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+      if ((p.customerEmail ?? '').trim().isNotEmpty)
+        pw.Text(p.customerEmail!.trim(), style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+      if ((p.customerAddress ?? '').trim().isNotEmpty)
+        pw.Text(p.customerAddress!.trim(), style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
     ];
   }
 
@@ -158,6 +207,7 @@ class PdfService {
     LayoutResult layout,
     String currency,
   ) {
+    final bom = BomLine.aggregate(layout.bom);
     return [
       pw.Text(w.name, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
       pw.SizedBox(height: 4),
@@ -176,7 +226,7 @@ class PdfService {
           color: ProfileColor.of(w.design.colorCode),
           showDimensions: true,
           width: 480,
-          height: 320,
+          height: 300,
         ),
       ),
       pw.SizedBox(height: 12),
@@ -185,6 +235,10 @@ class PdfService {
         for (final warn in w.warnings) pw.Text('• $warn', style: const pw.TextStyle(fontSize: 9, color: PdfColors.orange800)),
         pw.SizedBox(height: 8),
       ],
+      ..._cutListTable(bom),
+      pw.SizedBox(height: 10),
+      ..._glassListTable(bom),
+      pw.SizedBox(height: 10),
       pw.Text('Kalemler', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
       pw.SizedBox(height: 4),
       _linesTable(w.lines, currency),
@@ -196,6 +250,63 @@ class PdfService {
           style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
         ),
       ),
+    ];
+  }
+
+  List<pw.Widget> _cutListTable(List<BomLine> bom) {
+    final rows = bom
+        .where((l) =>
+            l.group == BomGroup.profile || l.group == BomGroup.bead || l.group == BomGroup.duplex)
+        .toList();
+    return [
+      pw.Text('Kesim listesi', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+      pw.SizedBox(height: 4),
+      if (rows.isEmpty)
+        pw.Text('Kesim satırı yok.', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600))
+      else
+        pw.TableHelper.fromTextArray(
+          headers: const ['Parça', 'Ölçü (mm)', 'Kesim', 'Adet'],
+          data: [
+            for (final l in rows)
+              [
+                l.label,
+                l.length != null ? '${l.length!.round()}' : '—',
+                l.cut ?? '—',
+                '${l.qty}',
+              ],
+          ],
+          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 8),
+          headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey700),
+          cellStyle: const pw.TextStyle(fontSize: 8),
+          border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.3),
+        ),
+    ];
+  }
+
+  List<pw.Widget> _glassListTable(List<BomLine> bom) {
+    final rows = bom.where((l) => l.group == BomGroup.glass || l.group == BomGroup.panel).toList();
+    return [
+      pw.Text('Cam / panel listesi', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+      pw.SizedBox(height: 4),
+      if (rows.isEmpty)
+        pw.Text('Cam/panel satırı yok.', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600))
+      else
+        pw.TableHelper.fromTextArray(
+          headers: const ['Kod', 'Ölçü (G × Y mm)', 'Adet', 'Alan (m²)'],
+          data: [
+            for (final l in rows)
+              [
+                l.glassCode ?? '',
+                (l.w != null && l.h != null) ? '${l.w!.round()} × ${l.h!.round()}' : '—',
+                '${l.qty}',
+                formatQty(((l.w ?? 0) / 1000) * ((l.h ?? 0) / 1000) * l.qty),
+              ],
+          ],
+          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 8),
+          headerDecoration: const pw.BoxDecoration(color: PdfColors.teal700),
+          cellStyle: const pw.TextStyle(fontSize: 8),
+          border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.3),
+        ),
     ];
   }
 
@@ -294,10 +405,10 @@ class PdfService {
       data: [
         for (final l in lines)
           [
-            l.group,
+            bomGroupTr(l.group),
             l.code,
             l.name,
-            '${_qty(l.quantity)} ${l.unit}',
+            '${formatQty(l.quantity)} ${formatUnit(l.unit)}',
             '${formatMoney(l.unitPrice)} $currency',
             '${formatMoney(l.total)} $currency',
           ],
@@ -319,10 +430,10 @@ class PdfService {
       data: [
         for (final l in lines)
           [
-            l.group,
+            bomGroupTr(l.group),
             l.code,
             l.name,
-            '${_qty(l.quantity)} ${l.unit}',
+            '${formatQty(l.quantity)} ${formatUnit(l.unit)}',
             '${formatMoney(l.unitPrice)} $currency',
             '${formatMoney(l.total)} $currency',
           ],
@@ -375,6 +486,5 @@ class PdfService {
         child: pw.Text(text, textAlign: align, style: const pw.TextStyle(fontSize: 8)),
       );
 
-  static String _qty(double q) => q == q.roundToDouble() ? q.toStringAsFixed(0) : q.toStringAsFixed(2);
   static String _pct(double p) => p == p.roundToDouble() ? p.toStringAsFixed(0) : p.toStringAsFixed(1);
 }

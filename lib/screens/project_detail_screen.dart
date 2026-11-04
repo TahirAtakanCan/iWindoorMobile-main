@@ -1,9 +1,15 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:windoor_core/windoor_core.dart';
 import '../services/api_service.dart';
 import '../models/project.dart';
-import 'package:windoor_core/windoor_core.dart';
 import '../models/catalog.dart';
 import '../services/design_api.dart';
+import '../services/project_file_api.dart';
 import '../widgets/design_thumbnail.dart';
 import 'design_editor/design_editor_screen.dart';
 import 'project_quote_screen.dart';
@@ -110,24 +116,47 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   void _showEditProjectDialog(Project project) {
     final nameController = TextEditingController(text: project.name);
     final descController = TextEditingController(text: project.description);
+    final customerName = TextEditingController(text: project.customerName ?? '');
+    final customerPhone = TextEditingController(text: project.customerPhone ?? '');
+    final customerEmail = TextEditingController(text: project.customerEmail ?? '');
+    final customerAddress = TextEditingController(text: project.customerAddress ?? '');
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Proje Bilgilerini Düzenle"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameController, decoration: const InputDecoration(labelText: "Proje Adı")),
-            TextField(controller: descController, decoration: const InputDecoration(labelText: "Açıklama")),
-          ],
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: nameController, decoration: const InputDecoration(labelText: "Proje Adı")),
+                TextField(controller: descController, decoration: const InputDecoration(labelText: "Açıklama")),
+                const SizedBox(height: 8),
+                const Align(alignment: Alignment.centerLeft, child: Text("Müşteri", style: TextStyle(fontWeight: FontWeight.bold))),
+                TextField(controller: customerName, decoration: const InputDecoration(labelText: "Müşteri adı")),
+                TextField(controller: customerPhone, decoration: const InputDecoration(labelText: "Telefon")),
+                TextField(controller: customerEmail, decoration: const InputDecoration(labelText: "E-posta"), keyboardType: TextInputType.emailAddress),
+                TextField(controller: customerAddress, decoration: const InputDecoration(labelText: "Adres"), maxLines: 2),
+              ],
+            ),
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("İptal")),
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(context);
-              bool success = await _apiService.updateProject(project.id, nameController.text, descController.text);
+              final success = await _apiService.updateProject(
+                project.id,
+                nameController.text.trim(),
+                descController.text.trim(),
+                customerName: customerName.text.trim(),
+                customerPhone: customerPhone.text.trim(),
+                customerEmail: customerEmail.text.trim(),
+                customerAddress: customerAddress.text.trim(),
+              );
               if (success && mounted) {
                 _refreshProject();
                 ScaffoldMessenger.of(this.context).showSnackBar(const SnackBar(content: Text("Güncellendi")));
@@ -138,6 +167,48 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _exportProject(Project project) async {
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Proje dışa aktarılıyor...'), duration: Duration(seconds: 1)),
+      );
+      final (fileName, json) = await ProjectFileApi().exportProject(project.id);
+      if (!mounted) return;
+
+      if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+        final tmp = await getTemporaryDirectory();
+        final file = File('${tmp.path}${Platform.pathSeparator}$fileName');
+        await file.writeAsString(json, flush: true);
+        await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'Proje dosyası'));
+      } else {
+        final docs = await getApplicationDocumentsDirectory();
+        final dir = Directory('${docs.path}${Platform.pathSeparator}iWindoor');
+        await dir.create(recursive: true);
+        final path = '${dir.path}${Platform.pathSeparator}$fileName';
+        await File(path).writeAsString(json, flush: true);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Kaydedildi: $path'),
+            action: SnackBarAction(
+              label: 'Klasörü aç',
+              onPressed: () {
+                Process.run('explorer', [dir.path]);
+              },
+            ),
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Dışa aktarma hatası: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ApiError.from(e).message), backgroundColor: Colors.red),
+      );
+    }
   }
 
   // 2. Proje Sil (Delete Item)
@@ -266,6 +337,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   if (value == 'edit') _showEditProjectDialog(project);
                   if (value == 'delete') _confirmDelete();
                   if (value == 'cost') _openQuote();
+                  if (value == 'export') _exportProject(project);
                   if (value == 'sync_prices') _confirmPriceSync();
                   if (value == 'specs') {
                     Navigator.push(context, MaterialPageRoute(builder: (c) => ProjectSpecsScreen(projectId: project.id)));
@@ -293,6 +365,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     child: ListTile(
                       leading: Icon(Icons.price_check),
                       title: Text('Maliyet / Özet'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'export',
+                    child: ListTile(
+                      leading: Icon(Icons.download),
+                      title: Text('Dışa aktar (.iwd)'),
                       contentPadding: EdgeInsets.zero,
                     ),
                   ),

@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import '../config/app_config.dart';
 import 'package:iwindoor_mobil/models/cost_summary.dart';
 import 'package:iwindoor_mobil/models/profile.dart';
@@ -31,7 +32,7 @@ class ApiService {
       onError: (DioException e, handler) {
         if (e.response?.statusCode == 401) {
           // Token yok / süresi dolmuş. (403 = bu kayda yetki yok)
-          print("Oturum geçersiz (401)");
+          debugPrint("Oturum geçersiz (401)");
         }
         return handler.next(e);
       },
@@ -47,7 +48,7 @@ class ApiService {
       }
       return null;
     } catch (e) {
-      print("API Hatası: $e");
+      debugPrint("API Hatası: $e");
       return null;
     }
   }
@@ -62,7 +63,7 @@ class ApiService {
       
       return response.statusCode == 200;
     } catch (e) {
-      print("Bölme Hatası: $e");
+      debugPrint("Bölme Hatası: $e");
       return false;
     }
   }
@@ -76,7 +77,7 @@ class ApiService {
       );
       return response.statusCode == 200;
     } catch (e) {
-      print("Tip Güncelleme Hatası: $e");
+      debugPrint("Tip Güncelleme Hatası: $e");
       return false;
     }
   }
@@ -91,7 +92,7 @@ class ApiService {
       }
       return [];
     } catch (e) {
-      print("Profil Çekme Hatası: $e");
+      debugPrint("Profil Çekme Hatası: $e");
       return [];
     }
   }
@@ -119,7 +120,7 @@ class ApiService {
       await _dio.post('/projects/$projectId/calculate-price');
       
     } catch (e) {
-      print("Fiyat Hesaplama Hatası: $e");
+      debugPrint("Fiyat Hesaplama Hatası: $e");
     }
   }
 
@@ -133,18 +134,28 @@ class ApiService {
       }
       return [];
     } catch (e) {
-      print("Proje Listesi Hatası: $e");
+      debugPrint("Proje Listesi Hatası: $e");
       return [];
     }
   }
 
   // 2. Yeni Proje Oluştur
-  Future<Project?> createProject(String name, String description) async {
+  Future<Project?> createProject(
+    String name,
+    String description, {
+    String? customerName,
+    String? customerPhone,
+    String? customerEmail,
+    String? customerAddress,
+  }) async {
     try {
       final response = await _dio.post('/projects', data: {
         "name": name,
         "description": description,
-        // Backend'de totalPrice ve windowUnits otomatik set ediliyor
+        if (customerName != null && customerName.isNotEmpty) "customerName": customerName,
+        if (customerPhone != null && customerPhone.isNotEmpty) "customerPhone": customerPhone,
+        if (customerEmail != null && customerEmail.isNotEmpty) "customerEmail": customerEmail,
+        if (customerAddress != null && customerAddress.isNotEmpty) "customerAddress": customerAddress,
       });
       
       if (response.statusCode == 200) {
@@ -152,7 +163,7 @@ class ApiService {
       }
       return null;
     } catch (e) {
-      print("Proje Oluşturma Hatası: $e");
+      debugPrint("Proje Oluşturma Hatası: $e");
       return null;
     }
   }
@@ -167,22 +178,33 @@ class ApiService {
       });
       return true; // Başarılı
     } catch (e) {
-      print("Pencere Ekleme Hatası: $e");
+      debugPrint("Pencere Ekleme Hatası: $e");
       return false;
     }
   }
 
   // Proje Güncelle
-  Future<bool> updateProject(int id, String name, String description) async {
+  Future<bool> updateProject(
+    int id,
+    String name,
+    String description, {
+    String? customerName,
+    String? customerPhone,
+    String? customerEmail,
+    String? customerAddress,
+  }) async {
     try {
       final response = await _dio.put('/projects/$id', data: {
         "name": name,
         "description": description,
-        // Backend entity yapısına göre diğer alanlar null gidebilir veya mevcut korunur
+        "customerName": customerName,
+        "customerPhone": customerPhone,
+        "customerEmail": customerEmail,
+        "customerAddress": customerAddress,
       });
       return response.statusCode == 200;
     } catch (e) {
-      print("Güncelleme Hatası: $e");
+      debugPrint("Güncelleme Hatası: $e");
       return false;
     }
   }
@@ -193,7 +215,7 @@ class ApiService {
       final response = await _dio.delete('/projects/$id');
       return response.statusCode == 200;
     } catch (e) {
-      print("Silme Hatası: $e");
+      debugPrint("Silme Hatası: $e");
       return false;
     }
   }
@@ -218,7 +240,7 @@ class ApiService {
       });
       return response.statusCode == 200;
     } catch (e) {
-      print("Fiyat Güncelleme Hatası: $e");
+      debugPrint("Fiyat Güncelleme Hatası: $e");
       return false;
     }
   }
@@ -242,7 +264,7 @@ class ApiService {
       }
       return [];
     } catch (e) {
-      print("Cam Listesi Hatası: $e");
+      debugPrint("Cam Listesi Hatası: $e");
       return [];
     }
   }
@@ -255,7 +277,7 @@ class ApiService {
       });
       return response.statusCode == 200;
     } catch (e) {
-      print("Cam Fiyat Güncelleme Hatası: $e");
+      debugPrint("Cam Fiyat Güncelleme Hatası: $e");
       return false;
     }
   }
@@ -269,7 +291,7 @@ class ApiService {
       }
       return null;
     } catch (e) {
-      print("Maliyet Raporu Hatası: $e");
+      debugPrint("Maliyet Raporu Hatası: $e");
       return null;
     }
   }
@@ -283,7 +305,7 @@ class ApiService {
       }
       return null;
     } catch (e) {
-      print("Specs Hatası: $e");
+      debugPrint("Specs Hatası: $e");
       return null;
     }
   }
@@ -298,7 +320,7 @@ class ApiService {
       }
       return [];
     } catch (e) {
-      print("Çalışan Listesi Hatası: $e");
+      debugPrint("Çalışan Listesi Hatası: $e");
       return [];
     }
   }
@@ -313,7 +335,7 @@ class ApiService {
       });
       return response.statusCode == 200;
     } catch (e) {
-      print("Çalışan Ekleme Hatası: $e");
+      debugPrint("Çalışan Ekleme Hatası: $e");
       return false;
     }
   }

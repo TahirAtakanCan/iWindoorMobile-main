@@ -7,12 +7,6 @@ import 'package:windoor_core/windoor_core.dart';
 
 import '../drawing/glass_look.dart';
 
-/// DesignPainter ile aynı kenar boşlukları (mm, çizim ölçeğinde).
-class _Pads {
-  final double l, b, t, r;
-  const _Pads(this.l, this.b, this.t, this.r);
-}
-
 class _Xform {
   final double ox, oy, k, designH, widgetH;
   const _Xform(this.ox, this.oy, this.k, this.designH, this.widgetH);
@@ -46,6 +40,8 @@ PdfColor _mixWhite(PdfColor base, double amount) => PdfColor(
       base.blue + (1 - base.blue) * amount,
     );
 
+List<double> _uniq(List<double> v) => (v.map((e) => (e * 10).round() / 10).toSet().toList()..sort());
+
 /// Vektör pencere çizimi (PDF). Ölçü yazıları Positioned + Text ile üstte.
 pw.Widget pdfWindowDrawing({
   required WindowDesign design,
@@ -56,18 +52,29 @@ pw.Widget pdfWindowDrawing({
   required double height,
   bool showDimensions = true,
 }) {
-  final pads = showDimensions ? const _Pads(240, 240, 50, 50) : const _Pads(30, 30, 30, 30);
-  final totalW = design.width + pads.l + pads.r;
-  final totalH = design.height + pads.t + pads.b;
+  final fsMm = math.max(design.width, design.height) / 30;
+  final xs = [0.0, ..._uniq(layout.mullionX), design.width];
+  final ys = [0.0, ..._uniq(layout.mullionY), design.height];
+  final hasX = xs.length > 2, hasY = ys.length > 2;
+  final chainGap = fsMm * 2.4;
+
+  // İki ölçü zinciri + yazılar kesilmesin (DesignPainter pad mantığı, dinamik alt/sol).
+  final padL = showDimensions ? math.max(240.0, 80 + (hasY ? chainGap : 0) + fsMm * 1.8) : 30.0;
+  final padB = showDimensions ? math.max(240.0, 80 + (hasX ? chainGap : 0) + fsMm * 1.8) : 30.0;
+  final padT = showDimensions ? 50.0 : 30.0;
+  final padR = showDimensions ? 50.0 : 30.0;
+
+  final totalW = design.width + padL + padR;
+  final totalH = design.height + padT + padB;
   final k = math.min(width / totalW, height / totalH);
-  final ox = (width - totalW * k) / 2 + pads.l * k;
-  final oy = (height - totalH * k) / 2 + pads.b * k;
+  final ox = (width - totalW * k) / 2 + padL * k;
+  final oy = (height - totalH * k) / 2 + padB * k;
   final xf = _Xform(ox, oy, k, design.height, height);
-  final fs = math.max(design.width, design.height) / 30 * k;
+  final fs = math.max(6.0, fsMm * k);
 
   final labels = <pw.Widget>[];
   if (showDimensions) {
-    labels.addAll(_dimLabels(xf, layout, design.width, design.height, fs));
+    labels.addAll(_dimLabels(xf, xs, ys, hasX, hasY, design.width, design.height, fsMm, fs));
   }
 
   return pw.SizedBox(
@@ -86,6 +93,11 @@ pw.Widget pdfWindowDrawing({
             showDimensions: showDimensions,
             designW: design.width,
             designH: design.height,
+            xs: xs,
+            ys: ys,
+            hasX: hasX,
+            hasY: hasY,
+            fsMm: fsMm,
           ),
         ),
         ...labels,
@@ -94,27 +106,38 @@ pw.Widget pdfWindowDrawing({
   );
 }
 
-List<pw.Widget> _dimLabels(_Xform xf, LayoutResult layout, double designW, double designH, double fs) {
-  List<double> uniq(List<double> v) => (v.map((e) => (e * 10).round() / 10).toSet().toList()..sort());
-  final xs = [0.0, ...uniq(layout.mullionX), designW];
-  final ys = [0.0, ...uniq(layout.mullionY), designH];
-  final hasX = xs.length > 2, hasY = ys.length > 2;
+List<pw.Widget> _dimLabels(
+  _Xform xf,
+  List<double> xs,
+  List<double> ys,
+  bool hasX,
+  bool hasY,
+  double designW,
+  double designH,
+  double fsMm,
+  double fs,
+) {
+  final fontSize = fs.clamp(6.0, 11.0);
   final out = <pw.Widget>[];
 
   void addHoriz(List<double> v, double offMm) {
     for (var i = 0; i < v.length - 1; i++) {
       final mid = (v[i] + v[i + 1]) / 2;
       final label = '${(v[i + 1] - v[i]).round()}';
-      final left = xf.x(mid) - fs * 1.2;
-      final top = xf.topFromMm(offMm, textH: fs) - fs * 0.15;
+      // DesignPainter: off - fs*.25, above → çizginin hemen üstü (kasaya binmez).
+      final labelMmY = offMm - fsMm * 0.25;
+      final left = xf.x(mid) - fontSize * 1.2;
+      final top = xf.topFromMm(labelMmY, textH: fontSize);
       out.add(pw.Positioned(
         left: left,
         top: top,
         child: pw.SizedBox(
-          width: fs * 2.4,
-          child: pw.Text(label,
-              textAlign: pw.TextAlign.center,
-              style: pw.TextStyle(fontSize: fs.clamp(5, 11), color: PdfColors.grey800)),
+          width: fontSize * 2.4,
+          child: pw.Text(
+            label,
+            textAlign: pw.TextAlign.center,
+            style: pw.TextStyle(fontSize: fontSize, color: PdfColors.grey800),
+          ),
         ),
       ));
     }
@@ -124,18 +147,21 @@ List<pw.Widget> _dimLabels(_Xform xf, LayoutResult layout, double designW, doubl
     for (var i = 0; i < v.length - 1; i++) {
       final mid = (v[i] + v[i + 1]) / 2;
       final label = '${(v[i + 1] - v[i]).round()}';
-      final cx = xf.x(offMm);
-      final cyTop = xf.topFromMm(mid);
+      // Solunda; PDF y-up olduğu için +π/2 → aşağıdan yukarı okunur.
+      final anchorX = xf.x(offMm - fsMm * 0.25);
+      final midTop = xf.topFromMm(mid);
       out.add(pw.Positioned(
-        left: cx - fs * 1.5,
-        top: cyTop - fs * 1.2,
+        left: anchorX - fontSize * 1.2,
+        top: midTop - fontSize * 1.2,
         child: pw.Transform.rotate(
-          angle: -math.pi / 2,
+          angle: math.pi / 2,
           child: pw.SizedBox(
-            width: fs * 2.4,
-            child: pw.Text(label,
-                textAlign: pw.TextAlign.center,
-                style: pw.TextStyle(fontSize: fs.clamp(5, 11), color: PdfColors.grey800)),
+            width: fontSize * 2.4,
+            child: pw.Text(
+              label,
+              textAlign: pw.TextAlign.center,
+              style: pw.TextStyle(fontSize: fontSize, color: PdfColors.grey800),
+            ),
           ),
         ),
       ));
@@ -143,9 +169,9 @@ List<pw.Widget> _dimLabels(_Xform xf, LayoutResult layout, double designW, doubl
   }
 
   if (hasX) addHoriz(xs, designH + 80);
-  addHoriz([0, designW], designH + 80 + (hasX ? (math.max(designW, designH) / 30) * 2.4 : 0));
+  addHoriz([0, designW], designH + 80 + (hasX ? fsMm * 2.4 : 0));
   if (hasY) addVert(ys, -80);
-  addVert([0, designH], -80 - (hasY ? (math.max(designW, designH) / 30) * 2.4 : 0));
+  addVert([0, designH], -80 - (hasY ? fsMm * 2.4 : 0));
   return out;
 }
 
@@ -158,6 +184,11 @@ void _paintGeometry(
   required bool showDimensions,
   required double designW,
   required double designH,
+  required List<double> xs,
+  required List<double> ys,
+  required bool hasX,
+  required bool hasY,
+  required double fsMm,
 }) {
   final hair = math.max(0.35, 0.7);
   final fill = _pdf(color.fill);
@@ -202,7 +233,9 @@ void _paintGeometry(
     }
   }
 
-  if (showDimensions) _dimLines(canvas, xf, layout, designW, designH);
+  if (showDimensions) {
+    _dimLines(canvas, xf, xs, ys, hasX, hasY, designW, designH, fsMm);
+  }
 }
 
 const _sashShade = {ProfileSide.top: 0.0, ProfileSide.left: .04, ProfileSide.right: .10, ProfileSide.bottom: .15};
@@ -363,13 +396,17 @@ void _glass(
   c.strokePath();
 }
 
-void _dimLines(PdfGraphics c, _Xform xf, LayoutResult layout, double designW, double designH) {
-  List<double> uniq(List<double> v) => (v.map((e) => (e * 10).round() / 10).toSet().toList()..sort());
-  final xs = [0.0, ...uniq(layout.mullionX), designW];
-  final ys = [0.0, ...uniq(layout.mullionY), designH];
-  final hasX = xs.length > 2, hasY = ys.length > 2;
-  final fsMm = math.max(designW, designH) / 30;
-
+void _dimLines(
+  PdfGraphics c,
+  _Xform xf,
+  List<double> xs,
+  List<double> ys,
+  bool hasX,
+  bool hasY,
+  double designW,
+  double designH,
+  double fsMm,
+) {
   void chain(List<double> v, bool horiz, double off) {
     c.setStrokeColor(PdfColors.grey800);
     c.setLineWidth(0.6);

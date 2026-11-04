@@ -7,13 +7,29 @@ class QuoteProjectInfo {
   final int id;
   final String name;
   final String? description;
+  final String? customerName;
+  final String? customerPhone;
+  final String? customerEmail;
+  final String? customerAddress;
 
-  const QuoteProjectInfo({required this.id, required this.name, this.description});
+  const QuoteProjectInfo({
+    required this.id,
+    required this.name,
+    this.description,
+    this.customerName,
+    this.customerPhone,
+    this.customerEmail,
+    this.customerAddress,
+  });
 
   factory QuoteProjectInfo.fromJson(Map<String, dynamic> j) => QuoteProjectInfo(
         id: (j['id'] as num).toInt(),
         name: j['name'] as String? ?? '',
         description: j['description'] as String?,
+        customerName: j['customerName'] as String?,
+        customerPhone: j['customerPhone'] as String?,
+        customerEmail: j['customerEmail'] as String?,
+        customerAddress: j['customerAddress'] as String?,
       );
 }
 

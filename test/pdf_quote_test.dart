@@ -14,7 +14,7 @@ ProjectQuote _sampleQuote({int windowCount = 1}) {
         'quantity': 1,
         'width': 1200,
         'height': 1400,
-        'seriesName': 'Ekonomik',
+        'seriesName': 'Varsayılan seri',
         'design': {
           'schemaVersion': 1,
           'width': 1200,
@@ -44,10 +44,10 @@ ProjectQuote _sampleQuote({int windowCount = 1}) {
             'group': 'PROFILE',
             'code': 'K',
             'name': 'Kasa',
-            'quantity': 1,
+            'quantity': 18.024,
             'unit': 'm',
             'unitPrice': 10,
-            'total': 10,
+            'total': 180.24,
           }
         ],
         'warnings': <String>[],
@@ -68,10 +68,16 @@ ProjectQuote _sampleQuote({int windowCount = 1}) {
       'vatRate': 20,
       'defaultDiscountPct': 0,
       'currency': 'TRY',
-      'quoteNote': 'Teşekkürler',
+      'quoteNote': 'Tesekkurler',
       'quoteValidityDays': 30,
     },
-    'project': {'id': 1, 'name': 'Test Proje', 'description': 'PDF deneme'},
+    'project': {
+      'id': 1,
+      'name': 'Test Proje',
+      'description': 'PDF deneme',
+      'customerName': 'Musteri',
+      'customerPhone': '0555',
+    },
     'windows': [for (var i = 1; i <= windowCount; i++) window(i)],
     'materials': [
       {
@@ -95,25 +101,35 @@ ProjectQuote _sampleQuote({int windowCount = 1}) {
 }
 
 int _pdfPageCount(Uint8List bytes) {
-  // Ham PDF içinde sayfa nesnelerini say (ağ / font indirmeden).
   final text = latin1.decode(bytes, allowInvalid: true);
   return RegExp(r'/Type\s*/Page[^s]').allMatches(text).length;
 }
 
+String _pdfText(Uint8List bytes) => latin1.decode(bytes, allowInvalid: true);
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('örnek tekliften PDF üretir; %PDF ile başlar ve sayfa sayısı doğru', () async {
+  test('örnek tekliften PDF üretir; kesim listesi ve Türkçe grup adları var', () async {
     final quote = _sampleQuote(windowCount: 2);
     final bytes = await PdfService().buildQuotePdf(
       quote,
       CatalogSnapshot.fallback,
       base: pw.Font.helvetica(),
       bold: pw.Font.helveticaBold(),
+      compress: false,
     );
 
     expect(bytes, isNotEmpty);
     expect(String.fromCharCodes(bytes.take(4)), '%PDF');
-    expect(_pdfPageCount(bytes), expectedQuotePageCount(quote));
+    // MultiPage tabloları taşıyınca sayfa artabilir; en az kapak+pencere+malzeme.
+    expect(_pdfPageCount(bytes), greaterThanOrEqualTo(expectedQuotePageCount(quote)));
+
+    final text = _pdfText(bytes);
+    // PDF motoru kelimeleri ayrı Tj operatörleriyle yazar; bitişik arama güvenilir değil.
+    expect(text.contains('Kesim'), isTrue, reason: 'üretim kesim tablosu');
+    expect(text.contains('listesi'), isTrue, reason: 'kesim listesi başlığı');
+    expect(text.contains('Profil'), isTrue, reason: 'Türkçe grup adı');
+    expect(text.contains('Cam'), isTrue, reason: 'malzeme/cam grubu');
   });
 }

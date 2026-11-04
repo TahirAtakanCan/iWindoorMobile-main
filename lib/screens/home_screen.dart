@@ -1,6 +1,11 @@
+import 'dart:convert';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../services/design_api.dart';
+import '../services/project_file_api.dart';
 import '../models/project.dart';
 import 'project_detail_screen.dart';
 import 'price_settings_screen.dart';
@@ -49,54 +54,65 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Yeni Proje Oluşturma Dialogu
   void _showCreateDialog() {
-    final TextEditingController nameController = TextEditingController();
-    final TextEditingController descController = TextEditingController();
+    final nameController = TextEditingController();
+    final descController = TextEditingController();
+    final customerName = TextEditingController();
+    final customerPhone = TextEditingController();
+    final customerEmail = TextEditingController();
+    final customerAddress = TextEditingController();
 
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
           title: const Text("Yeni Proje"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: "Proje Adı", hintText: "Örn: Ahmet Bey Villası"),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(labelText: "Proje Adı *", hintText: "Örn: Ahmet Bey Villası"),
+                  ),
+                  TextField(
+                    controller: descController,
+                    decoration: const InputDecoration(labelText: "Açıklama", hintText: "Örn: Mutfak tadilatı"),
+                  ),
+                  const SizedBox(height: 8),
+                  const Align(alignment: Alignment.centerLeft, child: Text("Müşteri", style: TextStyle(fontWeight: FontWeight.bold))),
+                  TextField(controller: customerName, decoration: const InputDecoration(labelText: "Müşteri adı")),
+                  TextField(controller: customerPhone, decoration: const InputDecoration(labelText: "Telefon")),
+                  TextField(controller: customerEmail, decoration: const InputDecoration(labelText: "E-posta"), keyboardType: TextInputType.emailAddress),
+                  TextField(controller: customerAddress, decoration: const InputDecoration(labelText: "Adres"), maxLines: 2),
+                ],
               ),
-              TextField(
-                controller: descController,
-                decoration: const InputDecoration(labelText: "Açıklama", hintText: "Örn: Mutfak tadilatı"),
-              ),
-            ],
+            ),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text("İptal")),
             ElevatedButton(
               onPressed: () async {
-                if (nameController.text.isEmpty) return;
+                if (nameController.text.trim().isEmpty) return;
                 Navigator.pop(context);
 
-                // 1. Projeyi Oluştur
-                Project? newProject = await _apiService.createProject(
-                  nameController.text, 
-                  descController.text
+                final newProject = await _apiService.createProject(
+                  nameController.text.trim(),
+                  descController.text.trim(),
+                  customerName: customerName.text.trim(),
+                  customerPhone: customerPhone.text.trim(),
+                  customerEmail: customerEmail.text.trim(),
+                  customerAddress: customerAddress.text.trim(),
                 );
 
                 if (newProject != null) {
-                  _refreshProjects(); // Listeyi güncelle
-                  
-                  // 2. Detay Ekranına Git (isNewProject: TRUE)
-                  if (context.mounted) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ProjectDetailScreen(
-                          projectId: newProject.id,
-                        ),
-                      ),
-                    );
-                  }
+                  _refreshProjects();
+                  if (!mounted) return;
+                  Navigator.push(
+                    this.context,
+                    MaterialPageRoute(builder: (context) => ProjectDetailScreen(projectId: newProject.id)),
+                  );
                 }
               },
               child: const Text("Oluştur"),
@@ -107,6 +123,37 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _importProject() async {
+    try {
+      final picked = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['iwd', 'json'],
+      );
+      if (picked.isEmpty) return;
+      final file = picked.first;
+      final content = utf8.decode(await file.readAsBytes());
+      if (content.trim().isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Dosya okunamadı.')));
+        return;
+      }
+      final project = await ProjectFileApi().importProject(content);
+      _refreshProjects();
+      if (!mounted) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => ProjectDetailScreen(projectId: project.id)),
+      );
+      _refreshProjects();
+    } catch (e) {
+      debugPrint('İçe aktarma hatası: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ApiError.from(e).message), backgroundColor: Colors.red),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -114,7 +161,21 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text("iWindoor Projelerim"),
         centerTitle: true,
         elevation: 2,
-        // Drawer eklediğimiz için sol üstteki hamburger butonu OTOMATİK gelecek.
+        actions: [
+          IconButton(
+            tooltip: 'İçe aktar',
+            icon: const Icon(Icons.upload_file),
+            onPressed: _importProject,
+          ),
+          PopupMenuButton<String>(
+            onSelected: (v) {
+              if (v == 'import') _importProject();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'import', child: Text('İçe aktar (.iwd)')),
+            ],
+          ),
+        ],
       ),
       
       // --- YAN MENÜ (DRAWER) ---

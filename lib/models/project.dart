@@ -4,15 +4,23 @@ class Project {
   final int id;
   final String name;
   final String description;
-  final double totalPrice; // <--- YENİ EKLENEN ALAN
+  final double totalPrice;
   final List<WindowUnit> windowUnits;
+  final String? customerName;
+  final String? customerPhone;
+  final String? customerEmail;
+  final String? customerAddress;
 
   Project({
     required this.id,
     required this.name,
     required this.description,
-    required this.totalPrice, // <--- Constructor'a eklendi
+    required this.totalPrice,
     required this.windowUnits,
+    this.customerName,
+    this.customerPhone,
+    this.customerEmail,
+    this.customerAddress,
   });
 
   factory Project.fromJson(Map<String, dynamic> json) {
@@ -23,10 +31,12 @@ class Project {
       id: json['id'],
       name: json['name'],
       description: json['description'] ?? '',
-      // Backend'den bazen int (0), bazen double (10.5) gelebilir.
-      // 'num' ikisini de kapsar. Null gelirse 0.0 yap diyoruz.
-      totalPrice: (json['totalPrice'] as num?)?.toDouble() ?? 0.0, 
+      totalPrice: (json['totalPrice'] as num?)?.toDouble() ?? 0.0,
       windowUnits: unitsList,
+      customerName: json['customerName'] as String?,
+      customerPhone: json['customerPhone'] as String?,
+      customerEmail: json['customerEmail'] as String?,
+      customerAddress: json['customerAddress'] as String?,
     );
   }
 }

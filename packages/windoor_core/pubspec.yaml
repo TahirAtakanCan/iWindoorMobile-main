@@ -1,0 +1,10 @@
+name: windoor_core
+description: Pencere/kapı tasarım çekirdeği (saf Dart, Flutter bağımlılığı yok).
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.7.0
+
+dev_dependencies:
+  test: ^1.25.0

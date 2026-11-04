@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import '../config/app_config.dart';
 import 'package:iwindoor_mobil/models/cost_summary.dart';
 import 'package:iwindoor_mobil/models/profile.dart';
 import '../models/project.dart';
@@ -10,10 +11,11 @@ class ApiService {
   // Android Emulator için: 10.0.2.2
   // iOS Simulator için: 127.0.0.1 veya localhost
   // Gerçek Cihaz için: Bilgisayarının IP adresi (örn: 192.168.1.35)
+  // Sunucu adresi AppConfig'ten gelir (giriş ekranındaki ayar düğmesiyle değiştirilebilir).
   final Dio _dio = Dio(BaseOptions(
-    baseUrl: 'http://192.168.0.37:8080/api/v1', 
-    connectTimeout: const Duration(seconds: 5),
-    receiveTimeout: const Duration(seconds: 5),
+    baseUrl: AppConfig.apiUrl,
+    connectTimeout: const Duration(seconds: 8),
+    receiveTimeout: const Duration(seconds: 15),
   ));
   
   ApiService() {
@@ -27,9 +29,9 @@ class ApiService {
         return handler.next(options);
       },
       onError: (DioException e, handler) {
-        if (e.response?.statusCode == 403) {
-          // Token süresi dolmuş olabilir, kullanıcıyı Login'e atmak gerekebilir.
-          print("Yetkisiz Erişim (403)");
+        if (e.response?.statusCode == 401) {
+          // Token yok / süresi dolmuş. (403 = bu kayda yetki yok)
+          print("Oturum geçersiz (401)");
         }
         return handler.next(e);
       },

@@ -4,6 +4,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:windoor_core/windoor_core.dart';
 
@@ -22,10 +23,12 @@ class DesignPainter extends CustomPainter {
   final ProfileColor color;
   final GlassLook Function(String glassCode) lookOf;
   final String? selectedId;
+  final Set<String> issueIds;
   final bool showDimensions;
   final bool showLabels;
   final Color dimColor;
   final Color selectionColor;
+  final Color issueColor;
 
   DesignPainter({
     required this.layout,
@@ -34,10 +37,12 @@ class DesignPainter extends CustomPainter {
     required this.lookOf,
     this.color = ProfileColor.white,
     this.selectedId,
+    this.issueIds = const {},
     this.showDimensions = true,
     this.showLabels = false,
     this.dimColor = const Color(0xFF333333),
     this.selectionColor = const Color(0xFFE0701A),
+    this.issueColor = const Color(0xFFC62828),
   });
 
   // Ölçü çizgileri için kenar boşlukları (mm, çizim ölçeğinde)
@@ -103,6 +108,12 @@ class DesignPainter extends CustomPainter {
       }
     }
 
+    for (final id in issueIds) {
+      final box = layout.boxOf(id);
+      if (box == null) continue;
+      final r = Rect.fromLTRB(box.l, box.t, box.r, box.b).deflate(4);
+      _drawDashedRect(canvas, r, issueColor, 2.2 * hair, 12 / t.k, 7 / t.k);
+    }
     if (selectedId != null) {
       final box = layout.boxOf(selectedId!);
       if (box != null) {
@@ -113,6 +124,20 @@ class DesignPainter extends CustomPainter {
     }
     if (showDimensions) _dims(canvas, t.k);
     canvas.restore();
+  }
+
+  void _drawDashedRect(Canvas c, Rect r, Color col, double w, double dash, double gap) {
+    final path = Path()..addRect(r);
+    final dashed = Path();
+    for (final m in path.computeMetrics()) {
+      var d = 0.0;
+      while (d < m.length) {
+        final next = math.min(d + dash, m.length);
+        dashed.addPath(m.extractPath(d, next), Offset.zero);
+        d += dash + gap;
+      }
+    }
+    c.drawPath(dashed, _stroke(col, w));
   }
 
   // --- profil (kasa / kanat / çıta): dolgu + kenar + yön gölgesi ---
@@ -295,6 +320,7 @@ class DesignPainter extends CustomPainter {
   bool shouldRepaint(covariant DesignPainter old) =>
       old.layout != layout ||
       old.selectedId != selectedId ||
+      !setEquals(old.issueIds, issueIds) ||
       old.color != color ||
       old.showDimensions != showDimensions ||
       old.showLabels != showLabels ||

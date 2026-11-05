@@ -10,6 +10,7 @@ class DesignCanvas extends StatelessWidget {
   final LayoutResult layout;
   final GlassLook Function(String glassCode) lookOf;
   final String? selectedId;
+  final Set<String> issueIds;
   final ValueChanged<String?>? onSelect;
   final bool showDimensions;
   final bool showLabels;
@@ -20,6 +21,7 @@ class DesignCanvas extends StatelessWidget {
     required this.layout,
     required this.lookOf,
     this.selectedId,
+    this.issueIds = const {},
     this.onSelect,
     this.showDimensions = true,
     this.showLabels = false,
@@ -37,6 +39,7 @@ class DesignCanvas extends StatelessWidget {
         lookOf: lookOf,
         color: ProfileColor.of(design.colorCode),
         selectedId: selectedId,
+        issueIds: issueIds,
         showDimensions: showDimensions,
         showLabels: showLabels,
         dimColor: scheme.onSurface.withValues(alpha: .8),

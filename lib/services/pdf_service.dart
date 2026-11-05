@@ -43,7 +43,17 @@ String bomGroupTr(String group) => switch (group.trim().toUpperCase()) {
       'DUPLEX' => 'Dubleks',
       'GLASS' => 'Cam',
       'PANEL' => 'Panel',
+      'HARDWARE' => 'Donanım',
+      'ACCESSORY' => 'Aksesuar',
       _ => group,
+    };
+
+String hardwareKindTr(String? kind) => switch (kind) {
+      'TURN' => 'Açılır',
+      'TILT' => 'Vasistas',
+      'TILT_TURN' => 'Çift açılım',
+      'SLIDE' => 'Sürme',
+      _ => kind ?? '—',
     };
 
 String _dateTr(DateTime? d) {
@@ -87,7 +97,7 @@ class PdfService {
       ..._cover(q, lookOf, layoutOf, currency),
       for (final w in q.windows) ...[
         pw.NewPage(),
-        ..._windowPage(w, lookOf, layoutOf(w), currency),
+        ..._windowPage(w, lookOf, layoutOf(w), seriesForWindow(catalog, w).geometry, currency),
       ],
       pw.NewPage(),
       ..._materialsPage(q, currency),
@@ -205,9 +215,11 @@ class PdfService {
     QuoteWindow w,
     GlassLook Function(String) lookOf,
     LayoutResult layout,
+    SeriesGeometry geometry,
     String currency,
   ) {
     final bom = BomLine.aggregate(layout.bom);
+    final ruleIssues = checkDesign(layout, geometry);
     return [
       pw.Text(w.name, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
       pw.SizedBox(height: 4),
@@ -230,14 +242,17 @@ class PdfService {
         ),
       ),
       pw.SizedBox(height: 12),
-      if (w.warnings.isNotEmpty) ...[
+      if (w.warnings.isNotEmpty || ruleIssues.isNotEmpty) ...[
         pw.Text('Uyarılar', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.orange800)),
         for (final warn in w.warnings) pw.Text('• $warn', style: const pw.TextStyle(fontSize: 9, color: PdfColors.orange800)),
+        for (final i in ruleIssues) pw.Text('• ${i.message}', style: const pw.TextStyle(fontSize: 9, color: PdfColors.orange800)),
         pw.SizedBox(height: 8),
       ],
       ..._cutListTable(bom),
       pw.SizedBox(height: 10),
       ..._glassListTable(bom),
+      pw.SizedBox(height: 10),
+      ..._hardwareTable(bom),
       pw.SizedBox(height: 10),
       pw.Text('Kalemler', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
       pw.SizedBox(height: 4),
@@ -307,6 +322,30 @@ class PdfService {
           cellStyle: const pw.TextStyle(fontSize: 8),
           border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.3),
         ),
+    ];
+  }
+
+  List<pw.Widget> _hardwareTable(List<BomLine> bom) {
+    final rows = bom.where((l) => l.group == BomGroup.hardware).toList();
+    if (rows.isEmpty) return const [];
+    return [
+      pw.Text('Donanım', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+      pw.SizedBox(height: 4),
+      pw.TableHelper.fromTextArray(
+        headers: const ['Tür', 'Kanat ölçüsü (G × Y)', 'Adet'],
+        data: [
+          for (final l in rows)
+            [
+              hardwareKindTr(l.kind),
+              (l.w != null && l.h != null) ? '${l.w!.round()} × ${l.h!.round()}' : '—',
+              '${l.qty}',
+            ],
+        ],
+        headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 8),
+        headerDecoration: const pw.BoxDecoration(color: PdfColors.brown700),
+        cellStyle: const pw.TextStyle(fontSize: 8),
+        border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.3),
+      ),
     ];
   }
 

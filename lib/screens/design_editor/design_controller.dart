@@ -30,6 +30,7 @@ class DesignController extends ChangeNotifier {
 
   late WindowDesign _design;
   LayoutResult? _layout;
+  List<RuleIssue>? _issues;
   String? selectedId;
 
   final List<WindowDesign> _undo = [];
@@ -40,7 +41,20 @@ class DesignController extends ChangeNotifier {
   String? saveMessage;
 
   WindowDesign get design => _design;
-  LayoutResult get layout => _layout ??= LayoutEngine(geometry).run(_design);
+  LayoutResult get layout {
+    if (_layout == null) {
+      _layout = LayoutEngine(geometry).run(_design);
+      _issues = checkDesign(_layout!, geometry);
+    }
+    return _layout!;
+  }
+
+  /// Seri / yerleşim ile birlikte önbelleklenen kural uyarıları.
+  List<RuleIssue> get issues {
+    layout;
+    return _issues ?? const [];
+  }
+
   SeriesInfo get series => catalog.seriesFor(seriesId);
   SeriesGeometry get geometry => series.geometry;
   bool get canUndo => _undo.isNotEmpty;
@@ -86,6 +100,7 @@ class DesignController extends ChangeNotifier {
         glass: catalog.defaultGlassCode, panel: catalog.defaultPanelCode);
     _design = normalized.copyWith(seriesId: seriesId?.toString());
     _layout = null;
+    _issues = null;
     if (!keepHistory) {
       _undo.clear();
       _redo.clear();
@@ -106,6 +121,7 @@ class DesignController extends ChangeNotifier {
     _redo.clear();
     _design = next;
     _layout = null;
+    _issues = null;
     if (select != null) selectedId = select;
     dirty = true;
     if (saveState != SaveState.saving) saveState = SaveState.idle;
@@ -133,6 +149,7 @@ class DesignController extends ChangeNotifier {
 
   void _afterHistoryMove() {
     _layout = null;
+    _issues = null;
     dirty = true;
     if (selectedId != null && DesignOps.find(_design.root, selectedId!) == null) {
       final f = DesignOps.fills(_design.root);

@@ -13,6 +13,8 @@ void main() {
     expect(bomGroupTr('DUPLEX'), 'Dubleks');
     expect(bomGroupTr('GLASS'), 'Cam');
     expect(bomGroupTr('PANEL'), 'Panel');
+    expect(bomGroupTr('HARDWARE'), 'Donanım');
+    expect(bomGroupTr('ACCESSORY'), 'Aksesuar');
   });
 
   test('formatUnit m2 → m²', () {

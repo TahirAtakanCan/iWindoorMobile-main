@@ -15,6 +15,12 @@ class SeriesGeometry {
   final double mullionEndAllowance; // kayıt uç payı (uç başına)
   final double slideInterlock; // sürme kanat bindirmesi
   final double duplexWidth; // dubleks çıta genişliği
+  final double minSashWidth;
+  final double minSashHeight;
+  final double maxSashWidth;
+  final double maxSashHeight;
+  final double maxSlideSashWidth;
+  final double maxFixedGlassArea; // m²
 
   const SeriesGeometry({
     required this.id,
@@ -30,6 +36,12 @@ class SeriesGeometry {
     this.mullionEndAllowance = 3,
     this.slideInterlock = 40,
     this.duplexWidth = 18,
+    this.minSashWidth = 350,
+    this.minSashHeight = 350,
+    this.maxSashWidth = 1400,
+    this.maxSashHeight = 2400,
+    this.maxSlideSashWidth = 2000,
+    this.maxFixedGlassArea = 6.0,
   });
 
   double rebateFor(EdgeKind e) => switch (e) {
@@ -54,6 +66,12 @@ class SeriesGeometry {
       mullionEndAllowance: d('mullionEndAllowance', 3),
       slideInterlock: d('slideInterlock', 40),
       duplexWidth: d('duplexWidth', 18),
+      minSashWidth: d('minSashWidth', 350),
+      minSashHeight: d('minSashHeight', 350),
+      maxSashWidth: d('maxSashWidth', 1400),
+      maxSashHeight: d('maxSashHeight', 2400),
+      maxSlideSashWidth: d('maxSlideSashWidth', 2000),
+      maxFixedGlassArea: d('maxFixedGlassArea', 6.0),
     );
   }
 }

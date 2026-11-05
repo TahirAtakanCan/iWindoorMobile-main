@@ -52,9 +52,11 @@ class BarRect extends Prim {
 class GlassPrim extends Prim {
   final String nodeId;
   final Box visible; // çıta içinde görünen cam
+  final double cutW, cutH; // cam kesim ölçüsü (BOM GLASS/PANEL ile aynı, mm)
   final String glassCode;
   final FillType fill;
-  const GlassPrim(this.nodeId, this.visible, this.glassCode, this.fill) : super(DrawLayer.glass);
+  const GlassPrim(this.nodeId, this.visible, this.cutW, this.cutH, this.glassCode, this.fill)
+      : super(DrawLayer.glass);
 }
 
 class PolylinePrim extends Prim {
@@ -81,7 +83,7 @@ class HitArea {
 }
 
 // ---------- kesim listesi (backend BomPricer biçimi) ----------
-enum BomGroup { profile, bead, duplex, glass, panel }
+enum BomGroup { profile, bead, duplex, glass, panel, hardware }
 
 /// Profil satırının rolü: sunucu bunu serideki ilgili profile eşler.
 enum ProfileRole { frame, sash, mullion, slideSash }
@@ -91,21 +93,33 @@ class BomLine {
   final ProfileRole? role;
   final String label; // ekranda gösterilecek ad
   final double? length; // çubuk ise (mm)
-  final double? w, h; // cam/panel ise (mm)
+  final double? w, h; // cam/panel / donanım kanat ölçüsü (mm)
   final String? cut; // "45/45" , "90/90"
   final String? glassCode; // cam/panel kodu; çıtada camın kodu (kalınlığa göre çıta seçimi için)
+  final String? kind; // donanım: TURN | TILT | TILT_TURN | SLIDE
   final int qty;
 
   const BomLine.bar(this.group, this.label, this.length, this.cut, this.qty, {this.role, this.glassCode})
       : w = null,
-        h = null;
+        h = null,
+        kind = null;
 
   const BomLine.sheet(this.group, this.label, this.w, this.h, this.qty, {required this.glassCode})
       : length = null,
         cut = null,
-        role = null;
+        role = null,
+        kind = null;
+
+  const BomLine.hardware(this.kind, this.w, this.h, this.qty)
+      : group = BomGroup.hardware,
+        label = 'Donanım',
+        length = null,
+        cut = null,
+        role = null,
+        glassCode = null;
 
   bool get isBar => length != null;
+  bool get isHardware => group == BomGroup.hardware;
 
   static String _roleName(ProfileRole r) => switch (r) {
         ProfileRole.frame => 'FRAME',
@@ -115,9 +129,11 @@ class BomLine {
       };
 
   /// Backend'in beklediği satır: {"group":"PROFILE","role":"FRAME","length":1806,"qty":2,"cut":"45/45"}
+  /// Donanım: {"group":"HARDWARE","kind":"TILT_TURN","w":536,"h":1214,"qty":1}
   Map<String, dynamic> toJson() => {
         'group': group.name.toUpperCase(),
         if (role != null) 'role': _roleName(role!),
+        if (kind != null) 'kind': kind,
         if (length != null) 'length': _r1(length!),
         if (w != null) 'w': _r1(w!),
         if (h != null) 'h': _r1(h!),
@@ -126,12 +142,14 @@ class BomLine {
         'qty': qty,
       };
 
-  String get _key => '${group.name}|${role?.name}|$label|${length?.toStringAsFixed(1)}|'
+  String get _key => '${group.name}|${role?.name}|$kind|$label|${length?.toStringAsFixed(1)}|'
       '${w?.toStringAsFixed(1)}|${h?.toStringAsFixed(1)}|$cut|$glassCode';
 
-  BomLine _withQty(int q) => isBar
-      ? BomLine.bar(group, label, length, cut, q, role: role, glassCode: glassCode)
-      : BomLine.sheet(group, label, w, h, q, glassCode: glassCode);
+  BomLine _withQty(int q) {
+    if (isHardware) return BomLine.hardware(kind!, w!, h!, q);
+    if (isBar) return BomLine.bar(group, label, length, cut, q, role: role, glassCode: glassCode);
+    return BomLine.sheet(group, label, w, h, q, glassCode: glassCode!);
+  }
 
   static double _r1(double v) => (v * 10).roundToDouble() / 10;
 
@@ -147,11 +165,20 @@ class BomLine {
   }
 }
 
+/// Kanat özeti: kural kontrolü ve seçim vurgusu için.
+class SashInfo {
+  final List<String> fillIds;
+  final Box outer;
+  final bool sliding;
+  const SashInfo({required this.fillIds, required this.outer, required this.sliding});
+}
+
 class LayoutResult {
   final List<Prim> prims = [];
   final List<BomLine> bom = [];
   final List<HitArea> hits = [];
   final List<double> mullionX = [], mullionY = [];
+  final List<SashInfo> sashes = [];
 
   /// Bölme id -> referans aralığı (mm). Bölme ölçüsünü düzenlerken kullanılır.
   final Map<String, double> splitSpans = {};
@@ -215,6 +242,8 @@ class LayoutEngine {
         final si = so.deflate(s.sashFace);
         _ring(out, DrawLayer.sash, so, si);
         _bars(out, 'Kanat', ProfileRole.sash, so);
+        out.bom.add(BomLine.hardware(_hwKind(n.opening), so.w, so.h, 1));
+        out.sashes.add(SashInfo(fillIds: _fillIds(n.child), outer: so, sliding: false));
         _symbol(out, n.opening, si);
         _handle(out, n.opening, so);
         _area(out, n.child, si, ref, const _Edges.all(EdgeKind.sash));
@@ -226,6 +255,8 @@ class LayoutEngine {
           final si = so.deflate(s.sashFace);
           _ring(out, DrawLayer.sash, so, si, z: i);
           _bars(out, 'Sürme kanat', ProfileRole.slideSash, so);
+          out.bom.add(BomLine.hardware('SLIDE', so.w, so.h, 1));
+          out.sashes.add(SashInfo(fillIds: _fillIds(child), outer: so, sliding: true));
           _arrow(out, si, dir);
           _area(out, child, si, ref, const _Edges.all(EdgeKind.sash));
         }
@@ -282,7 +313,7 @@ class LayoutEngine {
 
     final gw = rect.w + s.rebateFor(e.l) + s.rebateFor(e.r);
     final gh = rect.h + s.rebateFor(e.t) + s.rebateFor(e.b);
-    out.prims.add(GlassPrim(n.id, vis, n.glassCode, n.fill));
+    out.prims.add(GlassPrim(n.id, vis, gw, gh, n.glassCode, n.fill));
     out.prims.add(TextPrim(DrawLayer.label, Pt(vis.cx, vis.cy), n.glassCode));
     out.bom.add(BomLine.sheet(
       n.fill == FillType.panel ? BomGroup.panel : BomGroup.glass,
@@ -312,6 +343,19 @@ class LayoutEngine {
     }
     out.hits.add(HitArea(n.id, rect));
   }
+
+  static String _hwKind(OpeningType o) => switch (o) {
+        OpeningType.turnLeft || OpeningType.turnRight => 'TURN',
+        OpeningType.tilt => 'TILT',
+        OpeningType.tiltTurnLeft || OpeningType.tiltTurnRight => 'TILT_TURN',
+      };
+
+  static List<String> _fillIds(DesignNode node) => switch (node) {
+        FillNode n => [n.id],
+        SashNode n => _fillIds(n.child),
+        SlideNode n => [..._fillIds(n.left), ..._fillIds(n.right)],
+        SplitNode n => [for (final c in n.children) ..._fillIds(c)],
+      };
 
   /// DIN/EN çizim kuralı: üçgenin tepesi menteşe tarafını gösterir.
   void _symbol(LayoutResult out, OpeningType o, Box r) {

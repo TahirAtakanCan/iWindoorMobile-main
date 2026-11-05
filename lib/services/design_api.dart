@@ -170,6 +170,12 @@ class DesignApi {
     }
   }
 
+  /// Katalog yazma işlemlerinden sonra yerel önbelleği siler.
+  Future<void> invalidateCatalogCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_catalogCacheKey);
+  }
+
   Future<WindowDoc> getWindow(int id) => _call(() async {
         final r = await _dio.get('/windows/$id');
         return WindowDoc.fromJson(Map<String, dynamic>.from(r.data as Map));

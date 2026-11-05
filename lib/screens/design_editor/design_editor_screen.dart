@@ -43,6 +43,29 @@ class _DesignEditorScreenState extends State<DesignEditorScreen> {
   }
 
   Future<void> _save() async {
+    final issues = c.issues;
+    if (issues.any((i) => i.isError)) {
+      final err = issues.firstWhere((i) => i.isError);
+      _snack(err.message, error: true);
+      return;
+    }
+    if (issues.isNotEmpty) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Uyarılar'),
+          content: Text(
+            'Tasarımda ${issues.length} uyarı var. Uyarılarla kaydedilsin mi?\n\n'
+            '${issues.map((i) => '• ${i.message}').join('\n')}',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Kaydet')),
+          ],
+        ),
+      );
+      if (proceed != true || !mounted) return;
+    }
     final ok = await c.save();
     if (!mounted) return;
     if (ok) {
@@ -55,6 +78,41 @@ class _DesignEditorScreenState extends State<DesignEditorScreen> {
     } else {
       _snack(c.saveMessage ?? 'Kaydedilemedi.', error: true);
     }
+  }
+
+  void _showIssues() {
+    final issues = c.issues;
+    if (issues.isEmpty) return;
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: Text(
+                issues.any((i) => i.isError) ? 'Hatalar ve uyarılar' : 'Uyarılar',
+                style: Theme.of(ctx).textTheme.titleMedium,
+              ),
+            ),
+            for (final i in issues)
+              ListTile(
+                leading: Icon(
+                  i.isError ? Icons.error_outline : Icons.warning_amber_rounded,
+                  color: i.isError ? Theme.of(ctx).colorScheme.error : Colors.orange.shade800,
+                ),
+                title: Text(i.message),
+                onTap: () {
+                  if (i.nodeIds.isNotEmpty) c.select(i.nodeIds.first);
+                  Navigator.pop(ctx);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _resolveConflict() async {
@@ -104,8 +162,7 @@ class _DesignEditorScreenState extends State<DesignEditorScreen> {
     );
     if (choice == 'discard') return true;
     if (choice == 'save') {
-      final ok = await c.save();
-      if (!ok && mounted && c.saveState == SaveState.conflict) await _resolveConflict();
+      await _save();
       return !c.dirty;
     }
     return false;
@@ -254,6 +311,7 @@ class _DesignEditorScreenState extends State<DesignEditorScreen> {
                 layout: c.layout,
                 lookOf: c.lookOf,
                 selectedId: c.selectedId,
+                issueIds: {for (final i in c.issues) ...i.nodeIds},
                 showLabels: _showLabels,
                 onSelect: (id) {
                   if (id != null) c.select(id);
@@ -270,6 +328,8 @@ class _DesignEditorScreenState extends State<DesignEditorScreen> {
     final theme = Theme.of(context);
     final fill = c.selectedFill;
     final glass = fill == null ? null : c.catalog.glassByCode(fill.glassCode);
+    final issueCount = c.issues.length;
+    final hasError = c.issues.any((i) => i.isError);
     final info = [
       '${c.design.width.round()} × ${c.design.height.round()} mm',
       c.series.name,
@@ -285,6 +345,20 @@ class _DesignEditorScreenState extends State<DesignEditorScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           child: Row(children: [
             Expanded(child: Text(info, style: theme.textTheme.bodySmall, overflow: TextOverflow.ellipsis, maxLines: 2)),
+            if (issueCount > 0)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: TextButton(
+                  onPressed: _showIssues,
+                  style: TextButton.styleFrom(
+                    foregroundColor: hasError ? theme.colorScheme.error : Colors.orange.shade900,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(hasError ? '⚠ $issueCount sorun' : '⚠ $issueCount uyarı'),
+                ),
+              ),
             IconButton(
               tooltip: 'Yakınlaştırmayı sıfırla',
               icon: const Icon(Icons.fit_screen),

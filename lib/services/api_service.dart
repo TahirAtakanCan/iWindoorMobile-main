@@ -220,31 +220,6 @@ class ApiService {
     }
   }
 
-  Future<List<Profile>> getAllProfilesForConfig() async {
-    try {
-      // Önce Frame, sonra Sash, sonra Mullion çekip birleştirelim
-      final frames = await getProfilesByType('FRAME');
-      final sashes = await getProfilesByType('SASH');
-      return [...frames, ...sashes];
-    } catch (e) {
-      return [];
-    }
-  }
-
-  // Fiyat Güncelle
-  Future<bool> updateProfilePrice(int id, double newPrice) async {
-    try {
-      // Query param olarak gönderiyoruz (?price=...)
-      final response = await _dio.put('/catalog/profiles/$id/price', queryParameters: {
-        "price": newPrice
-      });
-      return response.statusCode == 200;
-    } catch (e) {
-      debugPrint("Fiyat Güncelleme Hatası: $e");
-      return false;
-    }
-  }
-
   Future<bool> syncProjectPrices(int projectId) async {
     try {
       await _dio.post('/projects/$projectId/sync-prices');
@@ -266,19 +241,6 @@ class ApiService {
     } catch (e) {
       debugPrint("Cam Listesi Hatası: $e");
       return [];
-    }
-  }
-
-  // Cam Fiyatı Güncelle
-  Future<bool> updateGlassPrice(int id, double newPrice) async {
-    try {
-      final response = await _dio.put('/catalog/glasses/$id/price', queryParameters: {
-        "price": newPrice
-      });
-      return response.statusCode == 200;
-    } catch (e) {
-      debugPrint("Cam Fiyat Güncelleme Hatası: $e");
-      return false;
     }
   }
 

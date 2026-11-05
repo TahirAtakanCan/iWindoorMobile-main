@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:windoor_core/windoor_core.dart';
 
 import '../../drawing/glass_look.dart';
-import '../../models/catalog.dart';
 import 'design_controller.dart';
 
 /// Sağ panel (masaüstü) / alt sayfa (telefon): pencere ve seçili alan özellikleri.
@@ -190,7 +189,11 @@ class _GlassPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final List<GlassInfo> glasses = c.catalog.glasses;
+    final selected = c.catalog.glassByCode(fill.glassCode);
+    final glasses = [
+      for (final g in c.catalog.glasses)
+        if (g.isActive || g.code == fill.glassCode) g,
+    ];
     if (glasses.isEmpty) {
       return const Text('Katalogda cam yok. Sunucu bağlantısını kontrol edin.');
     }
@@ -206,11 +209,18 @@ class _GlassPicker extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               child: Row(children: [
-                GlassLook.forStyle(g.visualStyle).swatch(),
+                Opacity(
+                  opacity: g.isActive ? 1 : .55,
+                  child: GlassLook.forStyle(g.visualStyle).swatch(),
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(g.name, overflow: TextOverflow.ellipsis),
+                    Text(
+                      g.isActive ? g.name : '${g.name} (pasif)',
+                      overflow: TextOverflow.ellipsis,
+                      style: g.isActive ? null : TextStyle(color: scheme.onSurface.withValues(alpha: .7)),
+                    ),
                     Text(
                       '${g.code}${g.thicknessMm != null ? ' · ${g.thicknessMm} mm' : ''} · '
                       '${GlassLook.styles[g.visualStyle] ?? g.visualStyle}',
@@ -223,6 +233,8 @@ class _GlassPicker extends StatelessWidget {
             ),
           ),
         ),
+      if (selected != null && !selected.isActive && !glasses.any((g) => g.code == selected.code))
+        Text('Seçili cam pasif: ${selected.name}', style: Theme.of(context).textTheme.bodySmall),
     ]);
   }
 }

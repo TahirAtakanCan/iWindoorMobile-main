@@ -8,7 +8,7 @@ import '../services/design_api.dart';
 import '../services/project_file_api.dart';
 import '../models/project.dart';
 import 'project_detail_screen.dart';
-import 'price_settings_screen.dart';
+import 'catalog/catalog_screen.dart';
 import 'company_settings_screen.dart';
 import 'employee_list_screen.dart';
 import 'login_screen.dart';
@@ -202,11 +202,11 @@ class _HomeScreenState extends State<HomeScreen> {
             // Menü Öğeleri
             ListTile(
               leading: const Icon(Icons.settings_applications),
-              title: const Text("Fiyat Ayarları"),
-              subtitle: const Text("PVC m birim fiyatları"),
+              title: const Text("Katalog ve Fiyatlar"),
+              subtitle: const Text("Profil, cam, aksesuar, donanım"),
               onTap: () {
                 Navigator.pop(context); // Menüyü kapat
-                Navigator.push(context, MaterialPageRoute(builder: (context) => const PriceSettingsScreen()));
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const CatalogScreen()));
               },
             ),
             ListTile(

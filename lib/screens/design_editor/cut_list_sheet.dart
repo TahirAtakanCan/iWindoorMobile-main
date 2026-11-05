@@ -31,6 +31,14 @@ class _CutListSheetState extends State<CutListSheet> {
     (BomGroup.panel, 'Panel'),
   ];
 
+  static String _hwKindTr(String? kind) => switch (kind) {
+        'TURN' => 'Açılır',
+        'TILT' => 'Vasistas',
+        'TILT_TURN' => 'Çift açılım',
+        'SLIDE' => 'Sürme',
+        _ => kind ?? '—',
+      };
+
   @override
   Widget build(BuildContext context) {
     final c = widget.c;
@@ -38,7 +46,10 @@ class _CutListSheetState extends State<CutListSheet> {
     final theme = Theme.of(context);
     double meters(bool Function(BomLine) f) =>
         lines.where((l) => l.isBar && f(l)).fold(0.0, (a, l) => a + l.length! * l.qty / 1000);
-    final area = lines.where((l) => !l.isBar).fold(0.0, (a, l) => a + l.w! * l.h! * l.qty / 1e6);
+    final area = lines
+        .where((l) => l.group == BomGroup.glass || l.group == BomGroup.panel)
+        .fold(0.0, (a, l) => a + l.w! * l.h! * l.qty / 1e6);
+    final hw = lines.where((l) => l.group == BomGroup.hardware).toList();
 
     return DefaultTabController(
       length: 2,
@@ -86,6 +97,33 @@ class _CutListSheetState extends State<CutListSheet> {
                     ),
                   ),
                 ],
+              if (hw.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.only(top: 12, bottom: 4),
+                  child: Text('Donanım', style: theme.textTheme.titleSmall),
+                ),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    headingRowHeight: 32,
+                    dataRowMinHeight: 30,
+                    dataRowMaxHeight: 34,
+                    columns: const [
+                      DataColumn(label: Text('Tür')),
+                      DataColumn(label: Text('Kanat (G×Y)')),
+                      DataColumn(label: Text('Adet'), numeric: true),
+                    ],
+                    rows: [
+                      for (final l in hw)
+                        DataRow(cells: [
+                          DataCell(Text(_hwKindTr(l.kind))),
+                          DataCell(Text('${l.w!.round()} × ${l.h!.round()}')),
+                          DataCell(Text('${l.qty}')),
+                        ]),
+                    ],
+                  ),
+                ),
+              ],
             ]),
             ListView(padding: const EdgeInsets.all(16), children: [
               if (c.dirty)

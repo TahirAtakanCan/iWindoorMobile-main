@@ -12,6 +12,7 @@ import '../services/project_file_api.dart';
 import '../utils/format.dart';
 import '../widgets/design_thumbnail.dart';
 import 'design_editor/design_editor_screen.dart';
+import 'production/production_screen.dart';
 import 'project_quote_screen.dart';
 import 'project_specs_screen.dart';
 import 'templates/template_picker_screen.dart';
@@ -298,6 +299,18 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   if (value == 'specs') {
                     Navigator.push(context, MaterialPageRoute(builder: (c) => ProjectSpecsScreen(projectId: project.id)));
                   }
+                  if (value == 'production') {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (c) => ProductionScreen(
+                          projectId: project.id,
+                          project: project,
+                          catalog: _catalog,
+                        ),
+                      ),
+                    );
+                  }
                 },
                 itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
                   const PopupMenuItem<String>(
@@ -313,6 +326,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     child: ListTile(
                       leading: Icon(Icons.assignment),
                       title: Text('Teknik Özellikler'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'production',
+                    child: ListTile(
+                      leading: Icon(Icons.precision_manufacturing),
+                      title: Text('Üretim'),
                       contentPadding: EdgeInsets.zero,
                     ),
                   ),

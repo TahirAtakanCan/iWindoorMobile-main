@@ -13,6 +13,20 @@ class CompanyProfile {
   final String? quoteNote;
   final int quoteValidityDays;
 
+  /// Üretim: testere payı (mm).
+  final double sawKerfMm;
+
+  /// Üretim: her uç kesim payı (mm).
+  final double barTrimMm;
+
+  /// Üretim: kullanılabilir artık alt sınırı (mm).
+  final double minOffcutMm;
+
+  final String? glassSupplierName;
+  final String? glassSupplierPhone;
+  final String? glassSupplierEmail;
+  final String? glassOrderNote;
+
   const CompanyProfile({
     this.id,
     required this.name,
@@ -26,6 +40,13 @@ class CompanyProfile {
     this.currency = 'TRY',
     this.quoteNote,
     this.quoteValidityDays = 30,
+    this.sawKerfMm = 4,
+    this.barTrimMm = 10,
+    this.minOffcutMm = 500,
+    this.glassSupplierName,
+    this.glassSupplierPhone,
+    this.glassSupplierEmail,
+    this.glassOrderNote,
   });
 
   factory CompanyProfile.fromJson(Map<String, dynamic> j) => CompanyProfile(
@@ -41,6 +62,13 @@ class CompanyProfile {
         currency: j['currency'] as String? ?? 'TRY',
         quoteNote: j['quoteNote'] as String?,
         quoteValidityDays: (j['quoteValidityDays'] as num?)?.toInt() ?? 30,
+        sawKerfMm: (j['sawKerfMm'] as num?)?.toDouble() ?? (j['kerfMm'] as num?)?.toDouble() ?? 4,
+        barTrimMm: (j['barTrimMm'] as num?)?.toDouble() ?? (j['trimMm'] as num?)?.toDouble() ?? 10,
+        minOffcutMm: (j['minOffcutMm'] as num?)?.toDouble() ?? (j['minRemnantMm'] as num?)?.toDouble() ?? 500,
+        glassSupplierName: j['glassSupplierName'] as String? ?? j['glassVendorName'] as String?,
+        glassSupplierPhone: j['glassSupplierPhone'] as String? ?? j['glassVendorPhone'] as String?,
+        glassSupplierEmail: j['glassSupplierEmail'] as String? ?? j['glassVendorEmail'] as String?,
+        glassOrderNote: j['glassOrderNote'] as String? ?? j['glassNote'] as String?,
       );
 
   /// PUT gövdesi (id hariç).
@@ -56,6 +84,13 @@ class CompanyProfile {
         'currency': currency,
         'quoteNote': quoteNote,
         'quoteValidityDays': quoteValidityDays,
+        'sawKerfMm': sawKerfMm,
+        'barTrimMm': barTrimMm,
+        'minOffcutMm': minOffcutMm,
+        'glassSupplierName': glassSupplierName,
+        'glassSupplierPhone': glassSupplierPhone,
+        'glassSupplierEmail': glassSupplierEmail,
+        'glassOrderNote': glassOrderNote,
       };
 
   CompanyProfile copyWith({
@@ -71,6 +106,13 @@ class CompanyProfile {
     String? currency,
     String? quoteNote,
     int? quoteValidityDays,
+    double? sawKerfMm,
+    double? barTrimMm,
+    double? minOffcutMm,
+    String? glassSupplierName,
+    String? glassSupplierPhone,
+    String? glassSupplierEmail,
+    String? glassOrderNote,
   }) =>
       CompanyProfile(
         id: id ?? this.id,
@@ -85,5 +127,12 @@ class CompanyProfile {
         currency: currency ?? this.currency,
         quoteNote: quoteNote ?? this.quoteNote,
         quoteValidityDays: quoteValidityDays ?? this.quoteValidityDays,
+        sawKerfMm: sawKerfMm ?? this.sawKerfMm,
+        barTrimMm: barTrimMm ?? this.barTrimMm,
+        minOffcutMm: minOffcutMm ?? this.minOffcutMm,
+        glassSupplierName: glassSupplierName ?? this.glassSupplierName,
+        glassSupplierPhone: glassSupplierPhone ?? this.glassSupplierPhone,
+        glassSupplierEmail: glassSupplierEmail ?? this.glassSupplierEmail,
+        glassOrderNote: glassOrderNote ?? this.glassOrderNote,
       );
 }

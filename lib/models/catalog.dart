@@ -155,6 +155,8 @@ class ProfileInfo {
   final int? barLengthMm;
   final bool isDefault;
   final bool isActive;
+  final double? minGlassMm;
+  final double? maxGlassMm;
 
   const ProfileInfo({
     required this.id,
@@ -166,6 +168,8 @@ class ProfileInfo {
     this.barLengthMm,
     this.isDefault = false,
     this.isActive = true,
+    this.minGlassMm,
+    this.maxGlassMm,
   });
 
   factory ProfileInfo.fromJson(Map<String, dynamic> j) => ProfileInfo(
@@ -179,6 +183,8 @@ class ProfileInfo {
         isDefault: j['isDefault'] as bool? ?? j['defaultForType'] as bool? ?? false,
         // ProfileDto alanı "active"; bazı yanıtlar "isActive" kullanabilir.
         isActive: j['isActive'] as bool? ?? j['active'] as bool? ?? true,
+        minGlassMm: (j['minGlassMm'] as num?)?.toDouble() ?? (j['minGlass'] as num?)?.toDouble(),
+        maxGlassMm: (j['maxGlassMm'] as num?)?.toDouble() ?? (j['maxGlass'] as num?)?.toDouble(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -191,7 +197,22 @@ class ProfileInfo {
         if (barLengthMm != null) 'barLengthMm': barLengthMm,
         'isDefault': isDefault,
         'isActive': isActive,
+        if (minGlassMm != null) 'minGlassMm': minGlassMm,
+        if (maxGlassMm != null) 'maxGlassMm': maxGlassMm,
       };
+
+  CatalogProfile toCatalogProfile() => CatalogProfile(
+        id: id,
+        seriesId: seriesId,
+        type: type,
+        code: code,
+        name: name,
+        barLengthMm: (barLengthMm ?? 6500).toDouble(),
+        isDefault: isDefault,
+        isActive: isActive,
+        minGlass: minGlassMm,
+        maxGlass: maxGlassMm,
+      );
 }
 
 /// Aksesuar (kol, conta, set…). Birim: PIECE | METER | SET.

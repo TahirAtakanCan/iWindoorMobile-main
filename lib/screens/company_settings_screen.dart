@@ -27,6 +27,13 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
   final _currency = TextEditingController();
   final _validity = TextEditingController();
   final _note = TextEditingController();
+  final _kerf = TextEditingController();
+  final _trim = TextEditingController();
+  final _minOffcut = TextEditingController();
+  final _glassName = TextEditingController();
+  final _glassPhone = TextEditingController();
+  final _glassEmail = TextEditingController();
+  final _glassNote = TextEditingController();
 
   bool _loading = true;
   bool _saving = false;
@@ -53,6 +60,13 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
     _currency.dispose();
     _validity.dispose();
     _note.dispose();
+    _kerf.dispose();
+    _trim.dispose();
+    _minOffcut.dispose();
+    _glassName.dispose();
+    _glassPhone.dispose();
+    _glassEmail.dispose();
+    _glassNote.dispose();
     super.dispose();
   }
 
@@ -93,6 +107,13 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
     _currency.text = c.currency;
     _validity.text = '${c.quoteValidityDays}';
     _note.text = c.quoteNote ?? '';
+    _kerf.text = _num(c.sawKerfMm);
+    _trim.text = _num(c.barTrimMm);
+    _minOffcut.text = _num(c.minOffcutMm);
+    _glassName.text = c.glassSupplierName ?? '';
+    _glassPhone.text = c.glassSupplierPhone ?? '';
+    _glassEmail.text = c.glassSupplierEmail ?? '';
+    _glassNote.text = c.glassOrderNote ?? '';
   }
 
   static String _num(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
@@ -113,6 +134,13 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
       currency: _currency.text.trim().toUpperCase(),
       quoteValidityDays: int.parse(_validity.text.trim()),
       quoteNote: _opt(_note.text),
+      sawKerfMm: double.parse(_kerf.text.replaceAll(',', '.')),
+      barTrimMm: double.parse(_trim.text.replaceAll(',', '.')),
+      minOffcutMm: double.parse(_minOffcut.text.replaceAll(',', '.')),
+      glassSupplierName: _opt(_glassName.text),
+      glassSupplierPhone: _opt(_glassPhone.text),
+      glassSupplierEmail: _opt(_glassEmail.text),
+      glassOrderNote: _opt(_glassNote.text),
     );
     try {
       final saved = await _api.updateCompany(profile);
@@ -232,6 +260,35 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
                           ),
                         ]),
                         _field(_note, 'Teklif notu', enabled: !_readOnly, maxLines: 4, maxLen: 2000),
+                        const SizedBox(height: 8),
+                        Text('Üretim', style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 8),
+                        Row(children: [
+                          Expanded(
+                            child: _field(_kerf, 'Testere payı (mm)', enabled: !_readOnly,
+                                keyboard: TextInputType.number, validator: _mmValidator),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _field(_trim, 'Kesim payı / uç (mm)', enabled: !_readOnly,
+                                keyboard: TextInputType.number, validator: _mmValidator),
+                          ),
+                        ]),
+                        _field(_minOffcut, 'Artık sınırı (mm)', enabled: !_readOnly,
+                            keyboard: TextInputType.number, validator: _mmValidator),
+                        const SizedBox(height: 8),
+                        Text('Cam tedarikçisi', style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 8),
+                        _field(_glassName, 'Firma adı', enabled: !_readOnly, maxLen: 200),
+                        _field(_glassPhone, 'Telefon', enabled: !_readOnly, maxLen: 40),
+                        _field(_glassEmail, 'E-posta', enabled: !_readOnly, keyboard: TextInputType.emailAddress,
+                            validator: (v) {
+                          final t = v?.trim() ?? '';
+                          if (t.isEmpty) return null;
+                          if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(t)) return 'Geçerli bir e-posta girin.';
+                          return null;
+                        }),
+                        _field(_glassNote, 'Sipariş notu', enabled: !_readOnly, maxLines: 3, maxLen: 2000),
                         if (!_readOnly) ...[
                           const SizedBox(height: 16),
                           FilledButton(
@@ -252,6 +309,13 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
     final n = double.tryParse((v ?? '').replaceAll(',', '.'));
     if (n == null) return 'Sayı girin.';
     if (n < 0 || n > 100) return '0–100 arası olmalı.';
+    return null;
+  }
+
+  String? _mmValidator(String? v) {
+    final n = double.tryParse((v ?? '').replaceAll(',', '.'));
+    if (n == null) return 'Sayı girin.';
+    if (n < 0 || n > 500) return '0–500 arası olmalı.';
     return null;
   }
 

@@ -107,7 +107,7 @@ class _VersionListScreenState extends State<VersionListScreen> {
                 await Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => VersionCompareScreen(versions: _items, projectName: widget.projectName),
+                    builder: (_) => VersionCompareScreen(projectId: widget.projectId, versions: _items, projectName: widget.projectName),
                   ),
                 );
               },

@@ -47,12 +47,14 @@ class VersionApi {
         return QuoteVersionSummary.fromJson(Map<String, dynamic>.from(r.data as Map));
       });
 
-  Future<QuoteVersionSnapshot> get(int versionId) => _call(() async {
-        final r = await _dio.get('/versions/$versionId');
+  Future<QuoteVersionSnapshot> get(int projectId, int versionId) => _call(() async {
+        final r = await _dio.get('/projects/$projectId/versions/$versionId');
         return QuoteVersionSnapshot.fromJson(Map<String, dynamic>.from(r.data as Map));
       });
 
-  Future<void> delete(int versionId) => _call(() => _dio.delete('/versions/$versionId'));
+  Future<void> delete(int projectId, int versionId) =>
+      _call(() => _dio.delete('/projects/$projectId/versions/$versionId'));
 
-  Future<void> restore(int versionId) => _call(() => _dio.post('/versions/$versionId/restore'));
+  Future<void> restore(int projectId, int versionId) =>
+      _call(() => _dio.post('/projects/$projectId/versions/$versionId/restore'));
 }

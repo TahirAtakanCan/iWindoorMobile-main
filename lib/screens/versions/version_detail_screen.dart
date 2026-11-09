@@ -46,7 +46,7 @@ class _VersionDetailScreenState extends State<VersionDetailScreen> {
   Future<void> _bootstrap() async {
     final role = await AuthService().getRole();
     try {
-      final snap = await _api.get(widget.versionId);
+      final snap = await _api.get(widget.projectId, widget.versionId);
       final cat = await DesignApi().catalog();
       if (!mounted) return;
       setState(() {
@@ -99,7 +99,7 @@ class _VersionDetailScreenState extends State<VersionDetailScreen> {
     );
     if (ok != true) return;
     try {
-      await _api.restore(widget.versionId);
+      await _api.restore(widget.projectId, widget.versionId);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sürüm geri yüklendi.')));
       Navigator.pop(context, true);
@@ -129,7 +129,7 @@ class _VersionDetailScreenState extends State<VersionDetailScreen> {
     );
     if (ok != true) return;
     try {
-      await _api.delete(widget.versionId);
+      await _api.delete(widget.projectId, widget.versionId);
       if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {

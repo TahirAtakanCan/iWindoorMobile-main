@@ -47,19 +47,25 @@ class SurveyApi {
         return SurveyItem.fromJson(Map<String, dynamic>.from(r.data as Map));
       });
 
-  Future<SurveyItem> update(int itemId, SurveyItem item) => _call(() async {
-        final r = await _dio.put('/survey/$itemId', data: item.toJson());
+  Future<SurveyItem> update(int projectId, int itemId, SurveyItem item) => _call(() async {
+        final r = await _dio.put('/projects/$projectId/survey/$itemId', data: item.toJson());
         return SurveyItem.fromJson(Map<String, dynamic>.from(r.data as Map));
       });
 
-  Future<void> delete(int itemId) => _call(() => _dio.delete('/survey/$itemId'));
+  Future<void> delete(int projectId, int itemId) =>
+      _call(() => _dio.delete('/projects/$projectId/survey/$itemId'));
 
-  Future<SurveyPhoto> uploadPhoto(int itemId, Uint8List bytes, {String filename = 'photo.jpg'}) => _call(() async {
+  Future<SurveyPhoto> uploadPhoto(int projectId, int itemId, Uint8List bytes, {String filename = 'photo.jpg'}) =>
+      _call(() async {
+        final lower = filename.toLowerCase();
+        final mime = lower.endsWith('.png')
+            ? 'image/png'
+            : (lower.endsWith('.webp') ? 'image/webp' : 'image/jpeg');
         final form = FormData.fromMap({
-          'file': MultipartFile.fromBytes(bytes, filename: filename),
+          'file': MultipartFile.fromBytes(bytes, filename: filename, contentType: DioMediaType.parse(mime)),
         });
         final r = await _dio.post(
-          '/survey/$itemId/photos',
+          '/projects/$projectId/survey/$itemId/photos',
           data: form,
           options: Options(contentType: 'multipart/form-data'),
         );
@@ -76,8 +82,8 @@ class SurveyApi {
 
   Future<void> deletePhoto(int photoId) => _call(() => _dio.delete('/survey-photos/$photoId'));
 
-  Future<SurveyItem> link(int itemId, int windowId) => _call(() async {
-        final r = await _dio.put('/survey/$itemId/link', data: {'windowId': windowId});
+  Future<SurveyItem> link(int projectId, int itemId, int windowId) => _call(() async {
+        final r = await _dio.put('/projects/$projectId/survey/$itemId/link', data: {'windowUnitId': windowId});
         return SurveyItem.fromJson(Map<String, dynamic>.from(r.data as Map));
       });
 }

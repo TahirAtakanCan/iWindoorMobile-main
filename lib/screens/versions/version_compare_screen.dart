@@ -7,10 +7,12 @@ import '../../utils/format.dart';
 import '../../utils/version_compare.dart';
 
 class VersionCompareScreen extends StatefulWidget {
+  final int projectId;
   final List<QuoteVersionSummary> versions;
   final String projectName;
 
-  const VersionCompareScreen({super.key, required this.versions, required this.projectName});
+  const VersionCompareScreen(
+      {super.key, required this.projectId, required this.versions, required this.projectName});
 
   @override
   State<VersionCompareScreen> createState() => _VersionCompareScreenState();
@@ -39,8 +41,8 @@ class _VersionCompareScreenState extends State<VersionCompareScreen> {
     if (a == null || b == null) return;
     setState(() => _busy = true);
     try {
-      final sa = await _api.get(a.id);
-      final sb = await _api.get(b.id);
+      final sa = await _api.get(widget.projectId, a.id);
+      final sb = await _api.get(widget.projectId, b.id);
       final r = compareVersions(
         grandTotalA: sa.grandTotal,
         grandTotalB: sb.grandTotal,

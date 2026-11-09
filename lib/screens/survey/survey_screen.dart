@@ -155,7 +155,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
       );
       for (final p in _pendingPhotos) {
         final bytes = await p.readAsBytes();
-        await _api.uploadPhoto(created.id, Uint8List.fromList(bytes), filename: p.name);
+        await _api.uploadPhoto(widget.projectId, created.id, Uint8List.fromList(bytes), filename: p.name);
       }
       _pendingPhotos.clear();
       if (andNext) {
@@ -203,7 +203,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
     );
     if (doc == null) return;
     try {
-      await _api.link(item.id, doc.id);
+      await _api.link(widget.projectId, item.id, doc.id);
       await _load();
       if (!mounted) return;
       final warnings = await _collectWarnings(doc.id);
@@ -276,7 +276,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
           quantity: item.quantity,
           catalog: _catalog,
         );
-        await _api.link(item.id, doc.id);
+        await _api.link(widget.projectId, item.id, doc.id);
         final w = await _collectWarnings(doc.id);
         if (w.isNotEmpty) warnings.add('${item.room}:\n${w.join('\n')}');
       } catch (e) {

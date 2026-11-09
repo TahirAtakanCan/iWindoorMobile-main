@@ -72,24 +72,33 @@ class VersionWindow {
     this.color,
   });
 
-  factory VersionWindow.fromJson(Map<String, dynamic> j) {
+  factory VersionWindow.fromJson(Map<String, dynamic> j, {Map<String, String> seriesNames = const {}}) {
     final designMap = j['design'] is Map ? Map<String, dynamic>.from(j['design'] as Map) : null;
     final w = (j['width'] as num?)?.toDouble() ?? 0;
     final h = (j['height'] as num?)?.toDouble() ?? 0;
+    final design = designMap != null
+        ? WindowDesign.fromJson(designMap)
+        : WindowDesign.single(w, h, seriesId: j['seriesId']?.toString());
+    final qty = (j['quantity'] as num?)?.toInt() ?? 1;
+    // Sürüm anlık görüntüsünde unitPrice MALZEME maliyetidir; satış fiyatı saleUnitPrice'tır.
+    final unit = (j['saleUnitPrice'] as num?)?.toDouble() ??
+        (j['salePriceOverride'] as num?)?.toDouble() ??
+        (j['unitPrice'] as num?)?.toDouble() ??
+        0;
+    final codes = <String>{for (final f in DesignOps.fills(design.root)) f.glassCode}..removeWhere((c) => c.isEmpty);
+    final seriesKey = (j['seriesId'] ?? design.seriesId)?.toString();
     return VersionWindow(
       windowId: (j['windowId'] as num?)?.toInt() ?? (j['id'] as num?)?.toInt(),
       name: j['name'] as String? ?? '',
       width: w,
       height: h,
-      quantity: (j['quantity'] as num?)?.toInt() ?? 1,
-      unitPrice: (j['unitPrice'] as num?)?.toDouble() ?? (j['saleUnitPrice'] as num?)?.toDouble() ?? 0,
-      lineTotal: (j['lineTotal'] as num?)?.toDouble() ?? 0,
-      seriesName: j['seriesName'] as String?,
-      glass: j['glass'] as String? ?? j['glassCode'] as String? ?? j['glassLabel'] as String?,
-      color: j['color'] as String? ?? j['colorCode'] as String?,
-      design: designMap != null
-          ? WindowDesign.fromJson(designMap)
-          : WindowDesign.single(w, h, seriesId: j['seriesId']?.toString()),
+      quantity: qty,
+      unitPrice: unit,
+      lineTotal: (j['lineTotal'] as num?)?.toDouble() ?? unit * qty,
+      seriesName: j['seriesName'] as String? ?? (seriesKey == null ? null : seriesNames[seriesKey]),
+      glass: j['glass'] as String? ?? j['glassCode'] as String? ?? (codes.isEmpty ? null : (codes.toList()..sort()).join(', ')),
+      color: j['color'] as String? ?? j['colorCode'] as String? ?? design.colorCode,
+      design: design,
     );
   }
 
@@ -156,6 +165,7 @@ class QuoteVersionSnapshot {
         series['${e.key}'] = '${e.value}';
       }
     }
+    final q = snap['quote'] is Map ? Map<String, dynamic>.from(snap['quote'] as Map) : snap;
     return QuoteVersionSnapshot(
       id: (j['id'] as num?)?.toInt() ?? (snap['id'] as num?)?.toInt() ?? 0,
       versionNo: (j['versionNo'] as num?)?.toInt() ?? (snap['versionNo'] as num?)?.toInt() ?? 0,
@@ -165,20 +175,20 @@ class QuoteVersionSnapshot {
       approved: j['approved'] as bool? ?? snap['approved'] as bool? ?? false,
       windows: [
         for (final w in (snap['windows'] as List? ?? j['windows'] as List? ?? const []))
-          VersionWindow.fromJson(Map<String, dynamic>.from(w as Map)),
+          VersionWindow.fromJson(Map<String, dynamic>.from(w as Map), seriesNames: series),
       ],
       extras: [
         for (final e in (snap['extras'] as List? ?? j['extras'] as List? ?? const []))
           QuoteExtra.fromJson(Map<String, dynamic>.from(e as Map)),
       ],
       seriesNames: series,
-      subtotal: (snap['subtotal'] as num?)?.toDouble() ?? 0,
-      discountPct: (snap['discountPct'] as num?)?.toDouble() ?? 0,
-      discountAmount: (snap['discountAmount'] as num?)?.toDouble() ?? (snap['discount'] as num?)?.toDouble() ?? 0,
-      netTotal: (snap['netTotal'] as num?)?.toDouble() ?? (snap['net'] as num?)?.toDouble() ?? 0,
-      vatRate: (snap['vatRate'] as num?)?.toDouble() ?? 20,
-      vatAmount: (snap['vatAmount'] as num?)?.toDouble() ?? (snap['vat'] as num?)?.toDouble() ?? 0,
-      grandTotal: (snap['grandTotal'] as num?)?.toDouble() ?? (j['grandTotal'] as num?)?.toDouble() ?? 0,
+      subtotal: (q['subtotal'] as num?)?.toDouble() ?? (j['saleSubtotal'] as num?)?.toDouble() ?? 0,
+      discountPct: (q['discountPct'] as num?)?.toDouble() ?? 0,
+      discountAmount: (q['discountAmount'] as num?)?.toDouble() ?? (q['discount'] as num?)?.toDouble() ?? 0,
+      netTotal: (q['netTotal'] as num?)?.toDouble() ?? (q['net'] as num?)?.toDouble() ?? 0,
+      vatRate: (q['vatRate'] as num?)?.toDouble() ?? 20,
+      vatAmount: (q['vatAmount'] as num?)?.toDouble() ?? (q['vat'] as num?)?.toDouble() ?? 0,
+      grandTotal: (q['grandTotal'] as num?)?.toDouble() ?? (j['grandTotal'] as num?)?.toDouble() ?? 0,
       currency: snap['currency'] as String? ?? j['currency'] as String? ?? 'TRY',
       company: snap['company'] is Map ? Map<String, dynamic>.from(snap['company'] as Map) : null,
       project: snap['project'] is Map ? Map<String, dynamic>.from(snap['project'] as Map) : null,

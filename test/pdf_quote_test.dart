@@ -37,12 +37,13 @@ ProjectQuote _sampleQuote({int windowCount = 1}) {
             ],
           },
         },
+        'saleUnitPrice': 1000,
         'unitPrice': 1000,
         'lineTotal': 1000,
         'lines': [
           {
             'group': 'PROFILE',
-            'code': 'K',
+            'code': 'KASA-GIZLI',
             'name': 'Kasa',
             'quantity': 18.024,
             'unit': 'm',
@@ -90,13 +91,16 @@ ProjectQuote _sampleQuote({int windowCount = 1}) {
         'total': 200,
       }
     ],
-    'subtotal': 1000.0 * windowCount,
+    'extras': [
+      {'id': 1, 'name': 'Nakliye', 'quantity': 1, 'unit': 'adet', 'unitPrice': 250, 'sortOrder': 0},
+    ],
+    'subtotal': 1000.0 * windowCount + 250,
     'discountPct': 0,
     'discountAmount': 0,
-    'netTotal': 1000.0 * windowCount,
+    'netTotal': 1000.0 * windowCount + 250,
     'vatRate': 20,
-    'vatAmount': 200.0 * windowCount,
-    'grandTotal': 1200.0 * windowCount,
+    'vatAmount': 200.0 * windowCount + 50,
+    'grandTotal': 1200.0 * windowCount + 300,
   });
 }
 
@@ -110,7 +114,7 @@ String _pdfText(Uint8List bytes) => latin1.decode(bytes, allowInvalid: true);
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('örnek tekliften PDF üretir; kesim listesi ve Türkçe grup adları var', () async {
+  test('müşteri PDF: çizim/fiyat var; Kalemler ve malzeme kodu yok', () async {
     final quote = _sampleQuote(windowCount: 2);
     final bytes = await PdfService().buildQuotePdf(
       quote,
@@ -122,14 +126,14 @@ void main() {
 
     expect(bytes, isNotEmpty);
     expect(String.fromCharCodes(bytes.take(4)), '%PDF');
-    // MultiPage tabloları taşıyınca sayfa artabilir; en az kapak+pencere+malzeme.
     expect(_pdfPageCount(bytes), greaterThanOrEqualTo(expectedQuotePageCount(quote)));
 
     final text = _pdfText(bytes);
-    // PDF motoru kelimeleri ayrı Tj operatörleriyle yazar; bitişik arama güvenilir değil.
-    expect(text.contains('Kesim'), isTrue, reason: 'üretim kesim tablosu');
-    expect(text.contains('listesi'), isTrue, reason: 'kesim listesi başlığı');
-    expect(text.contains('Profil'), isTrue, reason: 'Türkçe grup adı');
-    expect(text.contains('Cam'), isTrue, reason: 'malzeme/cam grubu');
+    expect(text.contains('Kalemler'), isFalse, reason: 'müşteri PDF malzeme kalemleri içermez');
+    expect(text.contains('KASA-GIZLI'), isFalse, reason: 'malzeme kodu müşteri PDFinde olmamalı');
+    expect(text.contains('Kesim'), isFalse, reason: 'kesim listesi atölye föyünde');
+    expect(text.contains('Malzeme'), isFalse, reason: 'malzeme özeti müşteri PDFinde yok');
+    // Fiyat / ek kalem izi (Helvetica Türkçe sınırlı; ASCII parçalar)
+    expect(text.contains('Nakliye') || text.contains('TEKL') || text.contains('P-01'), isTrue);
   });
 }

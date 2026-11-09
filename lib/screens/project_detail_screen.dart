@@ -7,9 +7,11 @@ import 'package:share_plus/share_plus.dart';
 import '../services/api_service.dart';
 import '../models/project.dart';
 import '../models/catalog.dart';
+import '../models/window_unit.dart';
+import '../services/company_api.dart';
 import '../services/design_api.dart';
+import '../services/pdf_service.dart';
 import '../services/project_file_api.dart';
-import '../utils/format.dart';
 import '../widgets/design_thumbnail.dart';
 import 'design_editor/design_editor_screen.dart';
 import 'production/production_screen.dart';
@@ -50,7 +52,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     _refreshProject();
   }
 
-  void _showWindowActions(int windowId, String name) {
+  void _showWindowActions(WindowUnit unit) {
     showModalBottomSheet(
       context: context,
       showDragHandle: true,
@@ -58,10 +60,18 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           ListTile(
             leading: const Icon(Icons.edit),
-            title: Text('"$name" düzenle'),
+            title: Text('"${unit.name}" düzenle'),
             onTap: () {
               Navigator.pop(ctx);
-              _openEditor(windowId, name);
+              _openEditor(unit.id, unit.name);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.sell_outlined),
+            title: const Text('Fiyatı elle gir'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _editSalePrice(unit);
             },
           ),
           ListTile(
@@ -70,7 +80,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             onTap: () async {
               Navigator.pop(ctx);
               try {
-                await _designApi.deleteWindow(windowId);
+                await _designApi.deleteWindow(unit.id);
                 _refreshProject();
               } catch (e) {
                 if (!mounted) return;
@@ -81,6 +91,67 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         ]),
       ),
     );
+  }
+
+  Future<void> _editSalePrice(WindowUnit unit) async {
+    final ctrl = TextEditingController(
+      text: unit.displaySaleUnit == null
+          ? ''
+          : (unit.displaySaleUnit == unit.displaySaleUnit!.roundToDouble()
+              ? unit.displaySaleUnit!.toStringAsFixed(0)
+              : unit.displaySaleUnit!.toStringAsFixed(2)),
+    );
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Satış fiyatı · ${unit.name}'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Birim satış (boş = otomatik)',
+            border: OutlineInputBorder(),
+            suffixText: 'TL',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Kaydet')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final t = ctrl.text.trim().replaceAll(',', '.');
+    final price = t.isEmpty ? null : double.tryParse(t);
+    if (t.isNotEmpty && price == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Geçerli bir sayı girin.')));
+      return;
+    }
+    try {
+      await _designApi.setSalePrice(unit.id, override: price);
+      _refreshProject();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiError.from(e).message), backgroundColor: Colors.red));
+    }
+  }
+
+  Future<void> _openCostReport() async {
+    try {
+      final quote = await CompanyApi().getProjectQuote(widget.projectId);
+      if (!mounted) return;
+      if (quote.costSummary == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Maliyet özeti yalnızca yöneticide görünür.')),
+        );
+        return;
+      }
+      await PdfService().shareOrPrintCostReport(quote);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e'), backgroundColor: Colors.red));
+    }
   }
 
   void _confirmPriceSync() {
@@ -311,6 +382,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                       ),
                     );
                   }
+                  if (value == 'cost_report') _openCostReport();
                 },
                 itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
                   const PopupMenuItem<String>(
@@ -342,6 +414,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     child: ListTile(
                       leading: Icon(Icons.price_check),
                       title: Text('Maliyet / Özet'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'cost_report',
+                    child: ListTile(
+                      leading: Icon(Icons.analytics_outlined),
+                      title: Text('İç maliyet raporu'),
                       contentPadding: EdgeInsets.zero,
                     ),
                   ),
@@ -391,10 +471,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     Text("Açıklama: ${project.description}", style: TextStyle(color: Colors.grey[800])),
                     const SizedBox(height: 5),
                     Text(
-                      'Toplam Tutar: ${formatMoney(project.totalPrice)}',
+                      'Toplam (KDV hariç): ${formatMoney(project.displaySaleTotal)}',
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green),
                     ),
-                    // İleride buraya Toplam m2, Ağırlık vb. eklenecek
                   ],
                 ),
               ),
@@ -418,8 +497,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                         return InkWell(
                           borderRadius: BorderRadius.circular(8),
                           onTap: () => _openEditor(unit.id, unit.name),
-                          onLongPress: () => _showWindowActions(unit.id, unit.name),
-                          onSecondaryTap: () => _showWindowActions(unit.id, unit.name),
+                          onLongPress: () => _showWindowActions(unit),
+                          onSecondaryTap: () => _showWindowActions(unit),
                           child: DesignThumbnail.unit(unit, catalog: _catalog),
                         );
                       },

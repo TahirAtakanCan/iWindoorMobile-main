@@ -34,7 +34,12 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
   final _glassPhone = TextEditingController();
   final _glassEmail = TextEditingController();
   final _glassNote = TextEditingController();
+  final _margin = TextEditingController();
+  final _labor = TextEditingController();
+  final _install = TextEditingController();
+  final _minArea = TextEditingController();
 
+  PricingMode _pricingMode = PricingMode.costPlus;
   bool _loading = true;
   bool _saving = false;
   bool _readOnly = false;
@@ -67,6 +72,10 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
     _glassPhone.dispose();
     _glassEmail.dispose();
     _glassNote.dispose();
+    _margin.dispose();
+    _labor.dispose();
+    _install.dispose();
+    _minArea.dispose();
     super.dispose();
   }
 
@@ -114,6 +123,11 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
     _glassPhone.text = c.glassSupplierPhone ?? '';
     _glassEmail.text = c.glassSupplierEmail ?? '';
     _glassNote.text = c.glassOrderNote ?? '';
+    _pricingMode = c.pricingMode;
+    _margin.text = _num(c.profitMarginPct);
+    _labor.text = _num(c.laborPerM2);
+    _install.text = _num(c.installPerM2);
+    _minArea.text = _num(c.minBillableAreaM2);
   }
 
   static String _num(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
@@ -141,6 +155,11 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
       glassSupplierPhone: _opt(_glassPhone.text),
       glassSupplierEmail: _opt(_glassEmail.text),
       glassOrderNote: _opt(_glassNote.text),
+      pricingMode: _pricingMode,
+      profitMarginPct: double.tryParse(_margin.text.replaceAll(',', '.')) ?? 0,
+      laborPerM2: double.tryParse(_labor.text.replaceAll(',', '.')) ?? 0,
+      installPerM2: double.tryParse(_install.text.replaceAll(',', '.')) ?? 0,
+      minBillableAreaM2: double.tryParse(_minArea.text.replaceAll(',', '.')) ?? 0,
     );
     try {
       final saved = await _api.updateCompany(profile);
@@ -260,6 +279,41 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
                           ),
                         ]),
                         _field(_note, 'Teklif notu', enabled: !_readOnly, maxLines: 4, maxLen: 2000),
+                        const SizedBox(height: 8),
+                        Text('Fiyatlandırma', style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<PricingMode>(
+                          initialValue: _pricingMode,
+                          decoration: const InputDecoration(labelText: 'Mod', border: OutlineInputBorder()),
+                          items: [
+                            for (final m in PricingMode.values)
+                              DropdownMenuItem(value: m, child: Text(m.labelTr)),
+                          ],
+                          onChanged: _readOnly
+                              ? null
+                              : (v) => setState(() => _pricingMode = v ?? _pricingMode),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _pricingMode == PricingMode.costPlus
+                              ? 'Satış = (malzeme + işçilik + montaj) × (1 + kâr %). İşçilik ve montaj m² başına eklenir.'
+                              : 'Satış = max(pencere alanı, en az faturalanan alan) × serinin m² satış fiyatı.',
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                        ),
+                        const SizedBox(height: 10),
+                        if (_pricingMode == PricingMode.costPlus) ...[
+                          _field(_margin, 'Kâr %', enabled: !_readOnly, keyboard: TextInputType.number, validator: _pctValidator),
+                          Row(children: [
+                            Expanded(
+                              child: _field(_labor, 'İşçilik ₺/m²', enabled: !_readOnly, keyboard: TextInputType.number),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _field(_install, 'Montaj ₺/m²', enabled: !_readOnly, keyboard: TextInputType.number),
+                            ),
+                          ]),
+                        ] else
+                          _field(_minArea, 'En az faturalanan alan (m²)', enabled: !_readOnly, keyboard: TextInputType.number),
                         const SizedBox(height: 8),
                         Text('Üretim', style: Theme.of(context).textTheme.titleMedium),
                         const SizedBox(height: 8),

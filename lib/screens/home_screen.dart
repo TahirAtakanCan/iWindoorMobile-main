@@ -7,6 +7,7 @@ import '../services/auth_service.dart';
 import '../services/design_api.dart';
 import '../services/project_file_api.dart';
 import '../models/project.dart';
+import '../utils/format.dart';
 import 'project_detail_screen.dart';
 import 'catalog/catalog_screen.dart';
 import 'company_settings_screen.dart';
@@ -328,7 +329,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          "${project.totalPrice.toStringAsFixed(2)} TL",
+                          formatMoney(project.displaySaleTotal),
                           style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16),
                         ),
                         const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),

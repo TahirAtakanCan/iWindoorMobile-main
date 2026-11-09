@@ -298,6 +298,79 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
 
   // ---------- PROFİLLER ----------
 
+  Widget _seriesSection() {
+    final series = (_snap?.series ?? const <SeriesInfo>[]).toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+    if (series.isEmpty) return const SizedBox.shrink();
+    return Card(
+      margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Seriler · m² satış fiyatı', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 8),
+            for (final s in series)
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text(s.name),
+                subtitle: Text([s.brand, s.material].where((e) => (e ?? '').isNotEmpty).join(' · ')),
+                trailing: Text(
+                  s.salePricePerM2 == null ? '—' : formatMoney(s.salePricePerM2!),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                onTap: _isAdmin ? () => _editSeriesSale(s) : null,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editSeriesSale(SeriesInfo s) async {
+    final ctrl = TextEditingController(
+      text: s.salePricePerM2 == null
+          ? ''
+          : (s.salePricePerM2 == s.salePricePerM2!.roundToDouble()
+              ? s.salePricePerM2!.toStringAsFixed(0)
+              : s.salePricePerM2!.toStringAsFixed(2)),
+    );
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('${s.name} · m² satış'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'm² satış fiyatı (boş = yok)',
+            border: OutlineInputBorder(),
+            suffixText: 'TL',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Kaydet')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final t = ctrl.text.trim().replaceAll(',', '.');
+    final price = t.isEmpty ? null : double.tryParse(t);
+    if (t.isNotEmpty && price == null) {
+      _snack('Geçerli bir sayı girin.');
+      return;
+    }
+    final saved = await _runWrite(() => _api.updateSeriesSalePrice(s.id, salePricePerM2: price));
+    if (saved != null) {
+      _snack('Seri fiyatı güncellendi.');
+      await _reload();
+    }
+  }
+
   Widget _profilesTab() {
     final snap = _snap!;
     final items = snap.profiles
@@ -310,42 +383,52 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
       final wide = box.maxWidth >= _wide;
       if (wide) {
         return SingleChildScrollView(
-          padding: const EdgeInsets.all(12),
-          child: DataTable(
-            showCheckboxColumn: false,
-            columns: const [
-              DataColumn(label: Text('Kod')),
-              DataColumn(label: Text('Ad')),
-              DataColumn(label: Text('Tür')),
-              DataColumn(label: Text('Fiyat'), numeric: true),
-              DataColumn(label: Text('Boy'), numeric: true),
-              DataColumn(label: Text('Durum')),
-            ],
-            rows: [
-              for (final p in items)
-                DataRow(
-                  onSelectChanged: _isAdmin ? (_) => _editProfile(p) : null,
-                  color: p.isActive ? null : WidgetStatePropertyAll(Colors.grey.withValues(alpha: .12)),
-                  cells: [
-                    DataCell(Text(p.code, style: _dim(p.isActive))),
-                    DataCell(Text(p.name, style: _dim(p.isActive))),
-                    DataCell(Text(p.type, style: _dim(p.isActive))),
-                    DataCell(Text(_tl(p.pricePerMeter), style: _dim(p.isActive))),
-                    DataCell(Text(p.barLengthMm?.toString() ?? '—', style: _dim(p.isActive))),
-                    DataCell(Text(p.isActive ? (p.isDefault ? 'Aktif · varsayılan' : 'Aktif') : 'Pasif',
-                        style: _dim(p.isActive))),
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _seriesSection(),
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: DataTable(
+                  showCheckboxColumn: false,
+                  columns: const [
+                    DataColumn(label: Text('Kod')),
+                    DataColumn(label: Text('Ad')),
+                    DataColumn(label: Text('Tür')),
+                    DataColumn(label: Text('Fiyat'), numeric: true),
+                    DataColumn(label: Text('Boy'), numeric: true),
+                    DataColumn(label: Text('Durum')),
+                  ],
+                  rows: [
+                    for (final p in items)
+                      DataRow(
+                        onSelectChanged: _isAdmin ? (_) => _editProfile(p) : null,
+                        color: p.isActive ? null : WidgetStatePropertyAll(Colors.grey.withValues(alpha: .12)),
+                        cells: [
+                          DataCell(Text(p.code, style: _dim(p.isActive))),
+                          DataCell(Text(p.name, style: _dim(p.isActive))),
+                          DataCell(Text(p.type, style: _dim(p.isActive))),
+                          DataCell(Text(_tl(p.pricePerMeter), style: _dim(p.isActive))),
+                          DataCell(Text(p.barLengthMm?.toString() ?? '—', style: _dim(p.isActive))),
+                          DataCell(Text(p.isActive ? (p.isDefault ? 'Aktif · varsayılan' : 'Aktif') : 'Pasif',
+                              style: _dim(p.isActive))),
+                        ],
+                      ),
                   ],
                 ),
+              ),
             ],
           ),
         );
       }
       return ListView.separated(
         padding: const EdgeInsets.all(12),
-        itemCount: items.length,
+        itemCount: items.length + 1,
         separatorBuilder: (_, __) => const SizedBox(height: 6),
         itemBuilder: (_, i) {
-          final p = items[i];
+          if (i == 0) return _seriesSection();
+          final p = items[i - 1];
           return Opacity(
             opacity: p.isActive ? 1 : .55,
             child: Card(

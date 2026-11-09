@@ -91,8 +91,16 @@ class SeriesInfo {
   final String? brand;
   final String material;
   final SeriesGeometry geometry;
+  final double? salePricePerM2;
 
-  const SeriesInfo({required this.id, required this.name, required this.geometry, this.brand, this.material = 'PVC'});
+  const SeriesInfo({
+    required this.id,
+    required this.name,
+    required this.geometry,
+    this.brand,
+    this.material = 'PVC',
+    this.salePricePerM2,
+  });
 
   factory SeriesInfo.fromJson(Map<String, dynamic> j) => SeriesInfo(
         id: (j['id'] as num).toInt(),
@@ -102,6 +110,7 @@ class SeriesInfo {
         geometry: j['geometry'] is Map
             ? SeriesGeometry.fromJson(Map<String, dynamic>.from(j['geometry'] as Map))
             : SeriesGeometry(id: '${j['id']}'),
+        salePricePerM2: (j['salePricePerM2'] as num?)?.toDouble() ?? (j['salePriceM2'] as num?)?.toDouble(),
       );
 }
 

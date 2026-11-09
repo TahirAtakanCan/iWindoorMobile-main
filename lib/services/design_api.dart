@@ -224,6 +224,11 @@ class DesignApi {
 
   Future<void> deleteWindow(int id) => _call(() => _dio.delete('/windows/$id'));
 
+  /// Elle satış fiyatı. [override] null → otomatik fiyata dön.
+  Future<void> setSalePrice(int windowId, {double? override}) => _call(() async {
+        await _dio.put('/windows/$windowId/sale-price', data: {'override': override});
+      });
+
   Future<Quote> quote(int id) => _call(() async {
         final r = await _dio.get('/windows/$id/quote');
         return Quote.fromJson(Map<String, dynamic>.from(r.data as Map));

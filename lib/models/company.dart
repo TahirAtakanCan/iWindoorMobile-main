@@ -1,3 +1,19 @@
+/// Fiyatlandırma modu.
+enum PricingMode {
+  costPlus,
+  perM2;
+
+  static PricingMode fromJson(Object? v) {
+    final s = '${v ?? ''}'.trim().toUpperCase();
+    if (s == 'PER_M2' || s == 'PERM2' || s == 'M2') return PricingMode.perM2;
+    return PricingMode.costPlus;
+  }
+
+  String get apiValue => this == PricingMode.perM2 ? 'PER_M2' : 'COST_PLUS';
+
+  String get labelTr => this == PricingMode.perM2 ? 'm² fiyatı' : 'Maliyet + kâr';
+}
+
 /// GET/PUT /api/v1/company gövdesi.
 class CompanyProfile {
   final int? id;
@@ -27,6 +43,12 @@ class CompanyProfile {
   final String? glassSupplierEmail;
   final String? glassOrderNote;
 
+  final PricingMode pricingMode;
+  final double profitMarginPct;
+  final double laborPerM2;
+  final double installPerM2;
+  final double minBillableAreaM2;
+
   const CompanyProfile({
     this.id,
     required this.name,
@@ -47,6 +69,11 @@ class CompanyProfile {
     this.glassSupplierPhone,
     this.glassSupplierEmail,
     this.glassOrderNote,
+    this.pricingMode = PricingMode.costPlus,
+    this.profitMarginPct = 30,
+    this.laborPerM2 = 0,
+    this.installPerM2 = 0,
+    this.minBillableAreaM2 = 0,
   });
 
   factory CompanyProfile.fromJson(Map<String, dynamic> j) => CompanyProfile(
@@ -69,6 +96,11 @@ class CompanyProfile {
         glassSupplierPhone: j['glassSupplierPhone'] as String? ?? j['glassVendorPhone'] as String?,
         glassSupplierEmail: j['glassSupplierEmail'] as String? ?? j['glassVendorEmail'] as String?,
         glassOrderNote: j['glassOrderNote'] as String? ?? j['glassNote'] as String?,
+        pricingMode: PricingMode.fromJson(j['pricingMode'] ?? j['priceMode']),
+        profitMarginPct: (j['profitMarginPct'] as num?)?.toDouble() ?? (j['marginPct'] as num?)?.toDouble() ?? 30,
+        laborPerM2: (j['laborPerM2'] as num?)?.toDouble() ?? (j['laborCostPerM2'] as num?)?.toDouble() ?? 0,
+        installPerM2: (j['installPerM2'] as num?)?.toDouble() ?? (j['installationPerM2'] as num?)?.toDouble() ?? 0,
+        minBillableAreaM2: (j['minBillableAreaM2'] as num?)?.toDouble() ?? (j['minAreaM2'] as num?)?.toDouble() ?? 0,
       );
 
   /// PUT gövdesi (id hariç).
@@ -91,6 +123,11 @@ class CompanyProfile {
         'glassSupplierPhone': glassSupplierPhone,
         'glassSupplierEmail': glassSupplierEmail,
         'glassOrderNote': glassOrderNote,
+        'pricingMode': pricingMode.apiValue,
+        'profitMarginPct': profitMarginPct,
+        'laborPerM2': laborPerM2,
+        'installPerM2': installPerM2,
+        'minBillableAreaM2': minBillableAreaM2,
       };
 
   CompanyProfile copyWith({
@@ -113,6 +150,11 @@ class CompanyProfile {
     String? glassSupplierPhone,
     String? glassSupplierEmail,
     String? glassOrderNote,
+    PricingMode? pricingMode,
+    double? profitMarginPct,
+    double? laborPerM2,
+    double? installPerM2,
+    double? minBillableAreaM2,
   }) =>
       CompanyProfile(
         id: id ?? this.id,
@@ -134,5 +176,10 @@ class CompanyProfile {
         glassSupplierPhone: glassSupplierPhone ?? this.glassSupplierPhone,
         glassSupplierEmail: glassSupplierEmail ?? this.glassSupplierEmail,
         glassOrderNote: glassOrderNote ?? this.glassOrderNote,
+        pricingMode: pricingMode ?? this.pricingMode,
+        profitMarginPct: profitMarginPct ?? this.profitMarginPct,
+        laborPerM2: laborPerM2 ?? this.laborPerM2,
+        installPerM2: installPerM2 ?? this.installPerM2,
+        minBillableAreaM2: minBillableAreaM2 ?? this.minBillableAreaM2,
       );
 }

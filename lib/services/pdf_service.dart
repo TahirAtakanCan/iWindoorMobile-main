@@ -11,9 +11,8 @@ import '../drawing/glass_look.dart';
 import '../models/catalog.dart';
 import '../models/project_quote.dart';
 import '../pdf/pdf_window_drawing.dart';
-import '../utils/bom_display.dart';
+import '../utils/design_summary.dart';
 import '../utils/format.dart';
-import 'design_api.dart';
 
 export '../utils/format.dart';
 
@@ -24,7 +23,8 @@ String _dateTr(DateTime? d) {
   return '$dd.$mm.${d.year}';
 }
 
-int expectedQuotePageCount(ProjectQuote q) => 1 + q.windows.length + 1;
+/// Kapak + her pencere (müşteri teklifi; malzeme sayfası yok).
+int expectedQuotePageCount(ProjectQuote q) => 1 + q.windows.length;
 
 SeriesInfo seriesForWindow(CatalogSnapshot catalog, QuoteWindow w) {
   final name = w.seriesName?.trim();
@@ -77,13 +77,10 @@ class PdfService {
           w,
           lookOf,
           layoutOf(w),
-          seriesForWindow(catalog, w).geometry,
           currency,
           catalog: catalog,
         ),
       ],
-      pw.NewPage(),
-      ..._materialsPage(q, currency),
     ];
 
     pdf.addPage(
@@ -117,6 +114,97 @@ class PdfService {
     } catch (e, st) {
       debugPrint('PDF paylaşım hatası: $e\n$st');
       rethrow;
+    }
+  }
+
+  Future<Uint8List> buildCostReportPdf(
+    ProjectQuote q, {
+    pw.Font? base,
+    pw.Font? bold,
+    bool compress = true,
+  }) async {
+    final cost = q.costSummary;
+    if (cost == null) {
+      throw StateError('Maliyet özeti yok.');
+    }
+    final font = base ?? await PdfGoogleFonts.robotoRegular();
+    final fontBold = bold ?? await PdfGoogleFonts.robotoBold();
+    final pdf = pw.Document(theme: pw.ThemeData.withFont(base: font, bold: fontBold), compress: compress);
+    final rows = cost.windows.isNotEmpty
+        ? cost.windows
+        : [
+            for (final w in q.windows)
+              CostWindowRow(
+                windowId: w.windowId,
+                name: w.name,
+                material: (w.materialUnitPrice ?? 0) * w.quantity,
+                labor: 0,
+                install: 0,
+                sale: w.lineTotal,
+                profit: w.lineTotal - (w.materialUnitPrice ?? 0) * w.quantity,
+              ),
+          ];
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(36),
+        build: (_) => [
+          pw.Text('İÇ MALİYET RAPORU', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 4),
+          pw.Text(q.project.name, style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+          pw.Text(q.company.name, style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+          pw.SizedBox(height: 12),
+          pw.Text('Proje özeti', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 6),
+          pw.TableHelper.fromTextArray(
+            headers: const ['Kalem', 'Tutar'],
+            data: [
+              ['Malzeme', formatMoney(cost.materialTotal)],
+              ['İşçilik', formatMoney(cost.laborTotal)],
+              ['Montaj', formatMoney(cost.installTotal)],
+              ['Satış ara toplam', formatMoney(cost.saleSubtotal)],
+              ['Brüt kâr', formatMoney(cost.grossProfit)],
+              ['Brüt kâr %', '%${_pct(cost.grossProfitPct)}'],
+            ],
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey800),
+            cellStyle: const pw.TextStyle(fontSize: 9),
+            border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.3),
+          ),
+          pw.SizedBox(height: 14),
+          pw.Text('Pencere bazında', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 6),
+          pw.TableHelper.fromTextArray(
+            headers: const ['Poz', 'Malzeme', 'İşçilik', 'Montaj', 'Satış', 'Kâr'],
+            data: [
+              for (final r in rows)
+                [
+                  r.name,
+                  formatMoney(r.material),
+                  formatMoney(r.labor),
+                  formatMoney(r.install),
+                  formatMoney(r.sale),
+                  formatMoney(r.profit),
+                ],
+            ],
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 8),
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.indigo700),
+            cellStyle: const pw.TextStyle(fontSize: 8),
+            border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.3),
+          ),
+        ],
+      ),
+    );
+    return pdf.save();
+  }
+
+  Future<void> shareOrPrintCostReport(ProjectQuote q) async {
+    final bytes = await buildCostReportPdf(q);
+    final name = 'Maliyet_${_safeFile(q.project.name)}.pdf';
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      await Printing.sharePdf(bytes: bytes, filename: name);
+    } else {
+      await Printing.layoutPdf(onLayout: (_) async => bytes, name: name);
     }
   }
 
@@ -163,6 +251,12 @@ class PdfService {
       pw.Text('Pencereler', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
       pw.SizedBox(height: 6),
       _windowsSummaryTable(q, lookOf, layoutOf, currency, catalog),
+      if (q.extras.isNotEmpty) ...[
+        pw.SizedBox(height: 14),
+        pw.Text('Ek kalemler', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 6),
+        _extrasTable(q.extras),
+      ],
       pw.SizedBox(height: 16),
       _totalsBlock(q, currency),
       if ((q.company.quoteNote ?? '').trim().isNotEmpty) ...[
@@ -199,24 +293,24 @@ class PdfService {
     QuoteWindow w,
     GlassLook Function(String) lookOf,
     LayoutResult layout,
-    SeriesGeometry geometry,
     String currency, {
     required CatalogSnapshot catalog,
   }) {
-    final bom = BomLine.aggregate(layout.bom);
-    final ruleIssues = checkDesign(layout, geometry, w.design);
     final seriesLabel = w.seriesName?.trim().isNotEmpty == true
         ? w.seriesName!.trim()
         : seriesForWindow(catalog, w).name;
-    final colorLabel = _colorTitle(catalog, w.design.colorCode);
+    final colorLabel = _colorTitle(catalog, w.design.colorCode) ?? 'Beyaz';
     final profileColor = _profileColor(catalog, w.design.colorCode);
+    final summary = summarizeDesign(w.design);
     return [
       pw.Text(w.name, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
       pw.SizedBox(height: 4),
       pw.Text(
-        '$seriesLabel'
-        '${colorLabel != null ? ' · $colorLabel' : ''}'
-        ' · ${w.quantity} adet',
+        '$seriesLabel · $colorLabel · ${w.quantity} adet',
+        style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
+      ),
+      pw.Text(
+        '${w.width.round()} × ${w.height.round()} mm',
         style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
       ),
       pw.SizedBox(height: 10),
@@ -232,171 +326,32 @@ class PdfService {
         ),
       ),
       pw.SizedBox(height: 12),
-      if (w.warnings.isNotEmpty || ruleIssues.isNotEmpty) ...[
-        pw.Text('Uyarılar', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.orange800)),
-        for (final warn in w.warnings) pw.Text('• $warn', style: const pw.TextStyle(fontSize: 9, color: PdfColors.orange800)),
-        for (final i in ruleIssues) pw.Text('• ${i.message}', style: const pw.TextStyle(fontSize: 9, color: PdfColors.orange800)),
-        pw.SizedBox(height: 8),
-      ],
-      ..._cutListTable(bom),
+      pw.Text('Cam: ${summary.glassLabel}', style: const pw.TextStyle(fontSize: 10)),
+      pw.Text('Açılım: ${summary.openingLabel}', style: const pw.TextStyle(fontSize: 10)),
       pw.SizedBox(height: 10),
-      ..._glassListTable(bom),
-      pw.SizedBox(height: 10),
-      ..._hardwareTable(bom),
-      pw.SizedBox(height: 10),
-      ..._linesSection(sortedQuoteLines(w.lines)),
-      pw.SizedBox(height: 8),
       pw.Align(
         alignment: pw.Alignment.centerRight,
         child: pw.Text(
-          'Birim: ${formatMoney(w.unitPrice)}   ·   Satır: ${formatMoney(w.lineTotal)}',
-          style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+          'Birim: ${formatMoney(w.displaySaleUnit)}   ·   Tutar: ${formatMoney(w.lineTotal)}',
+          style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
         ),
       ),
     ];
   }
 
-  /// Bölüm başlığı + tablo: sığmazsa başlık en az 3 satırla birlikte sonraki sayfaya geçer;
-  /// devam sayfalarında tablo başlığı tekrarlanır.
-  List<pw.Widget> _sectionDataTable({
-    required String title,
-    required List<String> headers,
-    required List<List<String>> data,
-    required PdfColor headerColor,
-    double headerFontSize = 8,
-    double cellFontSize = 8,
-  }) {
-    if (data.isEmpty) {
-      return [
-        pw.Text(title, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
-        pw.SizedBox(height: 4),
-        pw.Text('Satır yok.', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600)),
-      ];
-    }
-    final first = data.take(3).toList();
-    final rest = data.length > 3 ? data.sublist(3) : const <List<String>>[];
-    pw.Widget tableOf(List<List<String>> rows) => pw.TableHelper.fromTextArray(
-          headers: headers,
-          data: rows,
-          headerCount: 1,
-          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: headerFontSize),
-          headerDecoration: pw.BoxDecoration(color: headerColor),
-          cellStyle: pw.TextStyle(fontSize: cellFontSize),
-          border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.3),
-        );
-    return [
-      pw.Inseparable(
-        child: pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Text(title, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
-            pw.SizedBox(height: 4),
-            tableOf(first),
-          ],
-        ),
-      ),
-      if (rest.isNotEmpty) tableOf(rest),
-    ];
-  }
-
-  List<pw.Widget> _cutListTable(List<BomLine> bom) {
-    final rows = workshopCutLines(bom);
-    return _sectionDataTable(
-      title: 'Kesim listesi',
-      headers: const ['Parça', 'Ölçü (mm)', 'Kesim', 'Adet'],
+  pw.Widget _extrasTable(List<QuoteExtra> extras) {
+    return pw.TableHelper.fromTextArray(
+      headers: const ['Kalem', 'Miktar', 'Birim fiyat', 'Tutar'],
       data: [
-        for (final l in rows)
-          [
-            l.label,
-            l.length != null ? '${l.length!.round()}' : '—',
-            l.cut ?? '—',
-            '${l.qty}',
-          ],
+        for (final e in extras)
+          [e.name, formatQty(e.quantity, e.unit), formatMoney(e.unitPrice), formatMoney(e.total)],
       ],
-      headerColor: PdfColors.blueGrey700,
+      headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 8),
+      headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey700),
+      cellStyle: const pw.TextStyle(fontSize: 8),
+      border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.3),
     );
   }
-
-  List<pw.Widget> _glassListTable(List<BomLine> bom) {
-    final rows = bom.where((l) => l.group == BomGroup.glass || l.group == BomGroup.panel).toList();
-    return _sectionDataTable(
-      title: 'Cam / panel listesi',
-      headers: const ['Kod', 'Ölçü (G × Y mm)', 'Adet', 'Alan (m²)'],
-      data: [
-        for (final l in rows)
-          [
-            l.glassCode ?? '',
-            (l.w != null && l.h != null) ? '${l.w!.round()} × ${l.h!.round()}' : '—',
-            '${l.qty}',
-            formatQty(((l.w ?? 0) / 1000) * ((l.h ?? 0) / 1000) * l.qty),
-          ],
-      ],
-      headerColor: PdfColors.teal700,
-    );
-  }
-
-  List<pw.Widget> _hardwareTable(List<BomLine> bom) {
-    final rows = bom.where((l) => l.group == BomGroup.hardware).toList();
-    if (rows.isEmpty) return const [];
-    return _sectionDataTable(
-      title: 'Donanım',
-      headers: const ['Tür', 'Kanat ölçüsü (G × Y)', 'Adet'],
-      data: [
-        for (final l in rows)
-          [
-            hardwareKindTr(l.kind),
-            (l.w != null && l.h != null) ? '${l.w!.round()} × ${l.h!.round()}' : '—',
-            '${l.qty}',
-          ],
-      ],
-      headerColor: PdfColors.brown700,
-    );
-  }
-
-  List<pw.Widget> _materialsPage(ProjectQuote q, String currency) {
-    return [
-      pw.Text('Malzeme Özeti', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
-      pw.SizedBox(height: 10),
-      ..._materialsSection(sortedQuoteLines(q.materials)),
-      pw.SizedBox(height: 16),
-      _totalsBlock(q, currency),
-    ];
-  }
-
-  List<pw.Widget> _linesSection(List<QuoteLine> lines) => _sectionDataTable(
-        title: 'Kalemler',
-        headers: const ['Grup', 'Kod', 'Ad', 'Miktar', 'Birim fiyat', 'Tutar'],
-        data: [
-          for (final l in lines)
-            [
-              bomGroupTr(l.group),
-              l.code,
-              l.name,
-              formatQty(l.quantity, l.unit),
-              formatMoney(l.unitPrice),
-              formatMoney(l.total),
-            ],
-        ],
-        headerColor: PdfColors.grey700,
-      );
-
-  List<pw.Widget> _materialsSection(List<QuoteLine> lines) => _sectionDataTable(
-        title: 'Malzeme listesi',
-        headers: const ['Grup', 'Kod', 'Ad', 'Miktar', 'Birim fiyat', 'Tutar'],
-        data: [
-          for (final l in lines)
-            [
-              bomGroupTr(l.group),
-              l.code,
-              l.name,
-              formatQty(l.quantity, l.unit),
-              formatMoney(l.unitPrice),
-              formatMoney(l.total),
-            ],
-        ],
-        headerColor: PdfColors.blueGrey700,
-        headerFontSize: 9,
-      );
 
   pw.Widget _companyHeader(ProjectQuote q) {
     final c = q.company;

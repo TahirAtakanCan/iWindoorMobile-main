@@ -5,10 +5,12 @@ import '../drawing/design_canvas.dart';
 import '../drawing/glass_look.dart';
 import '../models/catalog.dart';
 import '../models/project_quote.dart';
+import '../services/auth_service.dart';
 import '../services/company_api.dart';
 import '../services/design_api.dart';
 import '../services/pdf_service.dart';
-import '../utils/bom_display.dart';
+
+const _extraSuggestions = ['Nakliye', 'Söküm', 'Denizlik', 'Montaj malzemesi'];
 
 class ProjectQuoteScreen extends StatefulWidget {
   final int projectId;
@@ -27,6 +29,7 @@ class _ProjectQuoteScreenState extends State<ProjectQuoteScreen> {
   CatalogSnapshot? _catalog;
   bool _loading = true;
   bool _pdfBusy = false;
+  bool _isAdmin = false;
   String? _error;
 
   @override
@@ -47,11 +50,13 @@ class _ProjectQuoteScreenState extends State<ProjectQuoteScreen> {
       _error = null;
     });
     try {
+      final role = await AuthService().getRole();
       final cat = await _designApi.catalog();
       final quote = await _api.getProjectQuote(widget.projectId);
       if (!mounted) return;
       _discountCtl.text = _fmtPct(quote.discountPct);
       setState(() {
+        _isAdmin = role == 'COMPANY_ADMIN';
         _catalog = cat;
         _quote = quote;
         _loading = false;
@@ -106,6 +111,122 @@ class _ProjectQuoteScreenState extends State<ProjectQuoteScreen> {
     }
   }
 
+  Future<void> _exportCostPdf() async {
+    final q = _quote;
+    if (q?.costSummary == null || _pdfBusy) return;
+    setState(() => _pdfBusy = true);
+    try {
+      await PdfService().shareOrPrintCostReport(q!);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Maliyet PDF hatası: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _pdfBusy = false);
+    }
+  }
+
+  Future<void> _editExtra(QuoteExtra? existing) async {
+    final nameCtrl = TextEditingController(text: existing?.name ?? '');
+    final qtyCtrl = TextEditingController(text: existing == null ? '1' : _fmtPct(existing.quantity));
+    final unitCtrl = TextEditingController(text: existing?.unit ?? 'adet');
+    final priceCtrl = TextEditingController(text: existing == null ? '0' : existing.unitPrice.toStringAsFixed(2));
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(existing == null ? 'Ek kalem' : 'Kalemi düzenle'),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            if (existing == null)
+              Wrap(
+                spacing: 6,
+                children: [
+                  for (final s in _extraSuggestions)
+                    ActionChip(
+                      label: Text(s),
+                      onPressed: () => nameCtrl.text = s,
+                    ),
+                ],
+              ),
+            const SizedBox(height: 8),
+            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Ad', border: OutlineInputBorder())),
+            const SizedBox(height: 8),
+            Row(children: [
+              Expanded(
+                child: TextField(
+                  controller: qtyCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Miktar', border: OutlineInputBorder()),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: unitCtrl,
+                  decoration: const InputDecoration(labelText: 'Birim', border: OutlineInputBorder()),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 8),
+            TextField(
+              controller: priceCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Birim fiyat', border: OutlineInputBorder(), suffixText: 'TL'),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Kaydet')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final extra = QuoteExtra(
+      id: existing?.id,
+      name: nameCtrl.text.trim(),
+      quantity: double.tryParse(qtyCtrl.text.replaceAll(',', '.')) ?? 1,
+      unit: unitCtrl.text.trim().isEmpty ? 'adet' : unitCtrl.text.trim(),
+      unitPrice: double.tryParse(priceCtrl.text.replaceAll(',', '.')) ?? 0,
+      sortOrder: existing?.sortOrder ?? (_quote?.extras.length ?? 0),
+    );
+    try {
+      if (existing?.id == null) {
+        await _api.createExtra(widget.projectId, extra);
+      } else {
+        await _api.updateExtra(widget.projectId, existing!.id!, extra);
+      }
+      await _reloadQuote();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e'), backgroundColor: Colors.red));
+    }
+  }
+
+  Future<void> _deleteExtra(QuoteExtra e) async {
+    if (e.id == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Kalemi sil'),
+        content: Text('"${e.name}" silinsin mi?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sil')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await _api.deleteExtra(widget.projectId, e.id!);
+      await _reloadQuote();
+    } catch (err) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$err'), backgroundColor: Colors.red));
+    }
+  }
+
   static String _fmtPct(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
 
   @override
@@ -115,8 +236,14 @@ class _ProjectQuoteScreenState extends State<ProjectQuoteScreen> {
       appBar: AppBar(
         title: const Text('Proje Teklifi'),
         actions: [
+          if (_isAdmin && q?.costSummary != null)
+            IconButton(
+              tooltip: 'İç maliyet PDF',
+              onPressed: _pdfBusy ? null : _exportCostPdf,
+              icon: const Icon(Icons.analytics_outlined),
+            ),
           IconButton(
-            tooltip: 'PDF',
+            tooltip: 'Müşteri PDF',
             onPressed: q == null || _pdfBusy ? null : _exportPdf,
             icon: _pdfBusy
                 ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
@@ -174,6 +301,34 @@ class _ProjectQuoteScreenState extends State<ProjectQuoteScreen> {
           const SizedBox(height: 12),
           ...q.windows.map((w) => _WindowCard(window: w, catalog: cat)),
           const SizedBox(height: 8),
+          Row(
+            children: [
+              Text('Ek kalemler', style: Theme.of(context).textTheme.titleMedium),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: () => _editExtra(null),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Ekle'),
+              ),
+            ],
+          ),
+          if (q.extras.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: Text('Ek kalem yok.', style: TextStyle(color: Colors.grey)),
+            )
+          else
+            ...q.extras.map((e) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(e.name),
+                  subtitle: Text('${formatQty(e.quantity, e.unit)} · ${formatMoney(e.unitPrice)}'),
+                  trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Text(formatMoney(e.total), style: const TextStyle(fontWeight: FontWeight.w600)),
+                    IconButton(icon: const Icon(Icons.edit_outlined, size: 20), onPressed: () => _editExtra(e)),
+                    IconButton(icon: const Icon(Icons.delete_outline, size: 20), onPressed: () => _deleteExtra(e)),
+                  ]),
+                )),
+          const SizedBox(height: 8),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -192,19 +347,10 @@ class _ProjectQuoteScreenState extends State<ProjectQuoteScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          Text('Malzeme özeti', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          if (q.materials.isEmpty)
-            const Text('Malzeme satırı yok.', style: TextStyle(color: Colors.grey))
-          else
-            ...sortedQuoteLines(q.materials).map((m) => ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(m.name),
-                  subtitle: Text('${groupTr(m.group)} · ${m.code} · ${formatQty(m.quantity, m.unit)}'),
-                  trailing: Text(formatMoney(m.total)),
-                )),
+          if (q.costSummary != null) ...[
+            const SizedBox(height: 16),
+            _CostCard(cost: q.costSummary!),
+          ],
           const SizedBox(height: 40),
         ],
       ),
@@ -221,7 +367,65 @@ class _ProjectQuoteScreenState extends State<ProjectQuoteScreen> {
           ],
         ),
       );
+}
 
+class _CostCard extends StatelessWidget {
+  final CostSummary cost;
+  const _CostCard({required this.cost});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: Colors.blueGrey.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Maliyet analizi', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            _row('Malzeme', formatMoney(cost.materialTotal)),
+            _row('İşçilik', formatMoney(cost.laborTotal)),
+            _row('Montaj', formatMoney(cost.installTotal)),
+            _row('Satış ara toplam', formatMoney(cost.saleSubtotal)),
+            _row('Brüt kâr', formatMoney(cost.grossProfit)),
+            _row('Brüt kâr %', '%${cost.grossProfitPct.toStringAsFixed(1)}'),
+            if (cost.windows.isNotEmpty) ...[
+              const Divider(),
+              Text('Pencere bazında', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 6),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  columnSpacing: 12,
+                  columns: const [
+                    DataColumn(label: Text('Poz')),
+                    DataColumn(label: Text('Malzeme'), numeric: true),
+                    DataColumn(label: Text('Satış'), numeric: true),
+                    DataColumn(label: Text('Kâr'), numeric: true),
+                  ],
+                  rows: [
+                    for (final w in cost.windows)
+                      DataRow(cells: [
+                        DataCell(Text(w.name)),
+                        DataCell(Text(formatMoney(w.material))),
+                        DataCell(Text(formatMoney(w.sale))),
+                        DataCell(Text(formatMoney(w.profit))),
+                      ]),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _row(String a, String b) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(a), Text(b)]),
+      );
 }
 
 class _WindowCard extends StatelessWidget {
@@ -255,13 +459,24 @@ class _WindowCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(window.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Row(children: [
+                    Expanded(child: Text(window.name, style: const TextStyle(fontWeight: FontWeight.bold))),
+                    if (window.overridden)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text('elle', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
+                      ),
+                  ]),
                   Text(
                     '${window.width.toStringAsFixed(0)} × ${window.height.toStringAsFixed(0)} mm'
                     '${window.seriesName != null ? ' · ${window.seriesName}' : ''}',
                     style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
                   ),
-                  Text('${window.quantity} adet · birim ${formatMoney(window.unitPrice)}'),
+                  Text('${window.quantity} adet · birim ${formatMoney(window.displaySaleUnit)}'),
                   Text('Tutar: ${formatMoney(window.lineTotal)}',
                       style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.green)),
                   if (window.warnings.isNotEmpty)

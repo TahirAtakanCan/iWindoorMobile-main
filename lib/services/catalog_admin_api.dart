@@ -266,6 +266,15 @@ class CatalogAdminApi {
         return CatalogColor.fromJson(Map<String, dynamic>.from(r.data as Map));
       }, invalidate: true);
 
+  // --- Seriler ---
+
+  Future<SeriesInfo> updateSeriesSalePrice(int id, {double? salePricePerM2}) => _call(() async {
+        final r = await _dio.put('/catalog/series/$id', data: {
+          'salePricePerM2': salePricePerM2,
+        });
+        return SeriesInfo.fromJson(Map<String, dynamic>.from(r.data as Map));
+      }, invalidate: true);
+
   // --- Toplu zam ---
 
   Future<PriceAdjustmentResult> adjustPrices({

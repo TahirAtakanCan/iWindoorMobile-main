@@ -29,13 +29,17 @@ class DesignThumbnail extends StatelessWidget {
   });
 
   factory DesignThumbnail.unit(WindowUnit unit, {Key? key, CatalogSnapshot? catalog}) {
+    final price = unit.displaySaleUnit;
+    final priceLabel = price == null
+        ? null
+        : '${formatMoney(price)}${unit.priceOverridden ? ' · elle' : ''}';
     return DesignThumbnail(
       key: key,
       design: unit.previewDesign,
       title: unit.name,
       subtitle: '${unit.width.toInt()} × ${unit.height.toInt()} mm'
           '${unit.quantity > 1 ? '  ·  ${unit.quantity} adet' : ''}',
-      subtitle2: unit.unitPrice != null ? formatMoney(unit.unitPrice!) : null,
+      subtitle2: priceLabel,
       catalog: catalog,
       seriesId: unit.seriesId,
     );

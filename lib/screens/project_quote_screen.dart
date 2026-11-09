@@ -9,6 +9,7 @@ import '../services/auth_service.dart';
 import '../services/company_api.dart';
 import '../services/design_api.dart';
 import '../services/pdf_service.dart';
+import '../utils/cost_breakdown.dart';
 
 const _extraSuggestions = ['Nakliye', 'Söküm', 'Denizlik', 'Montaj malzemesi'];
 
@@ -349,7 +350,7 @@ class _ProjectQuoteScreenState extends State<ProjectQuoteScreen> {
           ),
           if (q.costSummary != null) ...[
             const SizedBox(height: 16),
-            _CostCard(cost: q.costSummary!),
+            _CostCard(cost: enrichCostSummary(q)),
           ],
           const SizedBox(height: 40),
         ],
@@ -389,7 +390,7 @@ class _CostCard extends StatelessWidget {
             _row('Montaj', formatMoney(cost.installTotal)),
             _row('Satış ara toplam', formatMoney(cost.saleSubtotal)),
             _row('Brüt kâr', formatMoney(cost.grossProfit)),
-            _row('Brüt kâr %', '%${cost.grossProfitPct.toStringAsFixed(1)}'),
+            _row('Brüt kâr %', formatProfitPct(cost.grossProfitPct)),
             if (cost.windows.isNotEmpty) ...[
               const Divider(),
               Text('Pencere bazında', style: Theme.of(context).textTheme.titleSmall),
@@ -401,6 +402,8 @@ class _CostCard extends StatelessWidget {
                   columns: const [
                     DataColumn(label: Text('Poz')),
                     DataColumn(label: Text('Malzeme'), numeric: true),
+                    DataColumn(label: Text('İşçilik'), numeric: true),
+                    DataColumn(label: Text('Montaj'), numeric: true),
                     DataColumn(label: Text('Satış'), numeric: true),
                     DataColumn(label: Text('Kâr'), numeric: true),
                   ],
@@ -409,6 +412,8 @@ class _CostCard extends StatelessWidget {
                       DataRow(cells: [
                         DataCell(Text(w.name)),
                         DataCell(Text(formatMoney(w.material))),
+                        DataCell(Text(formatMoney(w.labor))),
+                        DataCell(Text(formatMoney(w.install))),
                         DataCell(Text(formatMoney(w.sale))),
                         DataCell(Text(formatMoney(w.profit))),
                       ]),

@@ -4,17 +4,26 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import '../models/customer.dart';
+import '../models/payment.dart';
 import '../services/api_service.dart';
 import '../models/project.dart';
 import '../models/catalog.dart';
 import '../models/window_unit.dart';
+import '../pdf/receipt_pdf.dart';
+import '../services/auth_service.dart';
 import '../services/company_api.dart';
+import '../services/customer_api.dart';
 import '../services/design_api.dart';
 import '../services/pdf_service.dart';
 import '../services/project_file_api.dart';
+import '../utils/status.dart';
 import '../widgets/design_thumbnail.dart';
+import '../widgets/status_badge.dart';
+import 'customers/customer_picker.dart';
 import 'design_editor/design_editor_screen.dart';
 import 'production/production_screen.dart';
+import 'project_history_screen.dart';
 import 'project_quote_screen.dart';
 import 'project_specs_screen.dart';
 import 'templates/template_picker_screen.dart';
@@ -30,19 +39,37 @@ class ProjectDetailScreen extends StatefulWidget {
 class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   final ApiService _apiService = ApiService();
   final DesignApi _designApi = DesignApi();
+  final CustomerApi _customerApi = CustomerApi();
   late Future<Project?> _projectFuture;
   CatalogSnapshot? _catalog;
+  PaymentsSummary? _payments;
+  bool _isAdmin = false;
 
   @override
   void initState() {
     super.initState();
     _refreshProject();
     _loadCatalog();
+    _loadRole();
+  }
+
+  Future<void> _loadRole() async {
+    final role = await AuthService().getRole();
+    if (mounted) setState(() => _isAdmin = role == 'COMPANY_ADMIN');
   }
 
   Future<void> _loadCatalog() async {
     final cat = await _designApi.catalog();
     if (mounted) setState(() => _catalog = cat);
+  }
+
+  Future<void> _loadPayments() async {
+    try {
+      final p = await _customerApi.listPayments(widget.projectId);
+      if (mounted) setState(() => _payments = p);
+    } catch (_) {
+      if (mounted) setState(() => _payments = null);
+    }
   }
 
   Future<void> _openEditor(int windowId, String name) async {
@@ -166,7 +193,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             onPressed: () async {
               Navigator.pop(context);
               await _apiService.syncProjectPrices(widget.projectId);
-              _refreshProject(); // Yeni fiyatı göster
+              _refreshProject();
               if (!mounted) return;
               ScaffoldMessenger.of(this.context).showSnackBar(const SnackBar(content: Text("Proje güncel kurlara çekildi.")));
             },
@@ -181,11 +208,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     setState(() {
       _projectFuture = _apiService.getProject(widget.projectId);
     });
+    _loadPayments();
   }
 
-  // --- İŞLEM FONKSİYONLARI ---
-
-  // 1. Proje Düzenle (Edit Specs)
   void _showEditProjectDialog(Project project) {
     final nameController = TextEditingController(text: project.name);
     final descController = TextEditingController(text: project.description);
@@ -193,51 +218,72 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     final customerPhone = TextEditingController(text: project.customerPhone ?? '');
     final customerEmail = TextEditingController(text: project.customerEmail ?? '');
     final customerAddress = TextEditingController(text: project.customerAddress ?? '');
+    int? customerId = project.customerId;
+    Customer? selected;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Proje Bilgilerini Düzenle"),
-        content: SizedBox(
-          width: 420,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(controller: nameController, decoration: const InputDecoration(labelText: "Proje Adı")),
-                TextField(controller: descController, decoration: const InputDecoration(labelText: "Açıklama")),
-                const SizedBox(height: 8),
-                const Align(alignment: Alignment.centerLeft, child: Text("Müşteri", style: TextStyle(fontWeight: FontWeight.bold))),
-                TextField(controller: customerName, decoration: const InputDecoration(labelText: "Müşteri adı")),
-                TextField(controller: customerPhone, decoration: const InputDecoration(labelText: "Telefon")),
-                TextField(controller: customerEmail, decoration: const InputDecoration(labelText: "E-posta"), keyboardType: TextInputType.emailAddress),
-                TextField(controller: customerAddress, decoration: const InputDecoration(labelText: "Adres"), maxLines: 2),
-              ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocal) => AlertDialog(
+          title: const Text("Proje Bilgilerini Düzenle"),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(controller: nameController, decoration: const InputDecoration(labelText: "Proje Adı")),
+                  TextField(controller: descController, decoration: const InputDecoration(labelText: "Açıklama")),
+                  const SizedBox(height: 8),
+                  const Align(alignment: Alignment.centerLeft, child: Text("Müşteri", style: TextStyle(fontWeight: FontWeight.bold))),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final c = await pickCustomer(context, current: selected);
+                      if (c == null) return;
+                      setLocal(() {
+                        selected = c;
+                        customerId = c.id;
+                        customerName.text = c.name;
+                        customerPhone.text = c.phone ?? '';
+                        customerEmail.text = c.email ?? '';
+                        customerAddress.text = c.address ?? '';
+                      });
+                    },
+                    icon: const Icon(Icons.person_search),
+                    label: Text(selected?.name ?? (customerName.text.isEmpty ? 'Müşteri seç' : customerName.text)),
+                  ),
+                  TextField(controller: customerName, decoration: const InputDecoration(labelText: "Müşteri adı")),
+                  TextField(controller: customerPhone, decoration: const InputDecoration(labelText: "Telefon")),
+                  TextField(controller: customerEmail, decoration: const InputDecoration(labelText: "E-posta"), keyboardType: TextInputType.emailAddress),
+                  TextField(controller: customerAddress, decoration: const InputDecoration(labelText: "Adres"), maxLines: 2),
+                ],
+              ),
             ),
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("İptal")),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                final success = await _apiService.updateProject(
+                  project.id,
+                  nameController.text.trim(),
+                  descController.text.trim(),
+                  customerId: customerId,
+                  customerName: customerName.text.trim(),
+                  customerPhone: customerPhone.text.trim(),
+                  customerEmail: customerEmail.text.trim(),
+                  customerAddress: customerAddress.text.trim(),
+                );
+                if (success && mounted) {
+                  _refreshProject();
+                  ScaffoldMessenger.of(this.context).showSnackBar(const SnackBar(content: Text("Güncellendi")));
+                }
+              },
+              child: const Text("Kaydet"),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("İptal")),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              final success = await _apiService.updateProject(
-                project.id,
-                nameController.text.trim(),
-                descController.text.trim(),
-                customerName: customerName.text.trim(),
-                customerPhone: customerPhone.text.trim(),
-                customerEmail: customerEmail.text.trim(),
-                customerAddress: customerAddress.text.trim(),
-              );
-              if (success && mounted) {
-                _refreshProject();
-                ScaffoldMessenger.of(this.context).showSnackBar(const SnackBar(content: Text("Güncellendi")));
-              }
-            },
-            child: const Text("Kaydet"),
-          ),
-        ],
       ),
     );
   }
@@ -284,7 +330,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     }
   }
 
-  // 2. Proje Sil (Delete Item)
   void _confirmDelete() {
     showDialog(
       context: context,
@@ -296,10 +341,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
             onPressed: () async {
-              Navigator.pop(context); // Dialogu kapat
+              Navigator.pop(context);
               bool success = await _apiService.deleteProject(widget.projectId);
               if (success && mounted) {
-                Navigator.pop(this.context); // Ekranı kapat (Ana sayfaya dön)
+                Navigator.pop(this.context);
               }
             },
             child: const Text("Sil"),
@@ -316,7 +361,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
-  // 4. Yeni Pencere Ekle — şablon seçici
   Future<void> _showAddWindowDialog() async {
     await Navigator.push(
       context,
@@ -331,35 +375,423 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     if (mounted) _refreshProject();
   }
 
+  Future<void> _handleStatusError(Object e) async {
+    final err = ApiError.from(e);
+    String msg = err.message;
+    if (err.status == 403) {
+      msg = 'Bu işlem için yetkiniz yok.';
+    } else if (err.code == 'INVALID_TRANSITION') {
+      msg = 'Geçersiz durum geçişi.';
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
+  }
+
+  Future<void> _changeStatus(Project project, ProjectStatus to, {String? note, DateTime? deliveryDate, Payment? deposit}) async {
+    try {
+      await _customerApi.changeStatus(project.id, status: to, note: note, deliveryDate: deliveryDate);
+      if (deposit != null) {
+        await _customerApi.createPayment(project.id, deposit);
+      }
+      _refreshProject();
+    } catch (e) {
+      await _handleStatusError(e);
+    }
+  }
+
+  Future<void> _onNextStep(Project project) async {
+    final next = project.status.nextForward;
+    if (next == null) return;
+
+    if (next == ProjectStatus.approved) {
+      double lockTotal = project.displaySaleTotal;
+      try {
+        final q = await CompanyApi().getProjectQuote(project.id);
+        lockTotal = q.grandTotal > 0 ? q.grandTotal : project.displaySaleTotal;
+      } catch (_) {}
+      final amountCtrl = TextEditingController();
+      PaymentMethod method = PaymentMethod.cash;
+      var takeDeposit = false;
+      if (!mounted) return;
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setLocal) => AlertDialog(
+            title: const Text('Onayla'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Kilitlenecek genel toplam (KDV dahil): ${formatMoney(lockTotal)}',
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 12),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Kapora al'),
+                  value: takeDeposit,
+                  onChanged: (v) => setLocal(() => takeDeposit = v ?? false),
+                ),
+                if (takeDeposit) ...[
+                  TextField(
+                    controller: amountCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(labelText: 'Tutar', border: OutlineInputBorder(), suffixText: 'TL'),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<PaymentMethod>(
+                    key: ValueKey(method),
+                    initialValue: method,
+                    decoration: const InputDecoration(labelText: 'Yöntem', border: OutlineInputBorder()),
+                    items: [
+                      for (final m in PaymentMethod.values)
+                        DropdownMenuItem(value: m, child: Text(paymentMethodTr(m))),
+                    ],
+                    onChanged: (v) => setLocal(() => method = v ?? PaymentMethod.cash),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
+              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Onayla')),
+            ],
+          ),
+        ),
+      );
+      if (ok != true) return;
+      Payment? deposit;
+      if (takeDeposit) {
+        final amt = double.tryParse(amountCtrl.text.replaceAll(',', '.'));
+        if (amt == null || amt <= 0) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Geçerli kapora tutarı girin.')));
+          return;
+        }
+        deposit = Payment(id: 0, kind: PaymentKind.payment, amount: amt, paidAt: DateTime.now(), method: method);
+      }
+      await _changeStatus(project, next, deposit: deposit);
+      return;
+    }
+
+    final label = project.status.nextForwardActionLabel ?? 'Devam';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(label),
+        content: Text('Durum "${next.labelTr}" olacak. Onaylıyor musunuz?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(label)),
+        ],
+      ),
+    );
+    if (ok == true) await _changeStatus(project, next);
+  }
+
+  Future<void> _revert(Project project) async {
+    final prev = project.status.previous;
+    if (prev == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Geri al'),
+        content: Text('Durum "${prev.labelTr}" olacak.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Geri al')),
+        ],
+      ),
+    );
+    if (ok == true) await _changeStatus(project, prev);
+  }
+
+  Future<void> _cancel(Project project) async {
+    final noteCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('İptal et'),
+        content: TextField(controller: noteCtrl, decoration: const InputDecoration(labelText: 'Not', border: OutlineInputBorder())),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('İptal et'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) await _changeStatus(project, ProjectStatus.cancelled, note: noteCtrl.text.trim());
+  }
+
+  Future<void> _setDeliveryDate(Project project) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: project.deliveryDate ?? DateTime.now().add(const Duration(days: 14)),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null) return;
+    try {
+      await _customerApi.setDeliveryDate(project.id, picked);
+      _refreshProject();
+    } catch (e) {
+      await _handleStatusError(e);
+    }
+  }
+
+  Future<void> _paymentDialog(Project project, {required bool refund}) async {
+    final amountCtrl = TextEditingController();
+    final noteCtrl = TextEditingController();
+    var paidAt = DateTime.now();
+    var method = PaymentMethod.cash;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: Text(refund ? 'İade' : 'Ödeme al'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: amountCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Tutar *', border: OutlineInputBorder(), suffixText: 'TL'),
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Tarih: ${formatDate(paidAt)}'),
+                  trailing: const Icon(Icons.calendar_today),
+                  onTap: () async {
+                    final d = await showDatePicker(
+                      context: ctx,
+                      initialDate: paidAt,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2100),
+                    );
+                    if (d != null) setLocal(() => paidAt = d);
+                  },
+                ),
+                DropdownButtonFormField<PaymentMethod>(
+                  key: ValueKey(method),
+                  initialValue: method,
+                  decoration: const InputDecoration(labelText: 'Yöntem', border: OutlineInputBorder()),
+                  items: [
+                    for (final m in PaymentMethod.values) DropdownMenuItem(value: m, child: Text(paymentMethodTr(m))),
+                  ],
+                  onChanged: (v) => setLocal(() => method = v ?? PaymentMethod.cash),
+                ),
+                const SizedBox(height: 8),
+                TextField(controller: noteCtrl, decoration: const InputDecoration(labelText: 'Not', border: OutlineInputBorder())),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(refund ? 'İade kaydet' : 'Kaydet')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+    final amt = double.tryParse(amountCtrl.text.replaceAll(',', '.'));
+    if (amt == null || amt <= 0) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Geçerli tutar girin.')));
+      return;
+    }
+    try {
+      await _customerApi.createPayment(
+        project.id,
+        Payment(
+          id: 0,
+          kind: refund ? PaymentKind.refund : PaymentKind.payment,
+          amount: amt,
+          paidAt: paidAt,
+          method: method,
+          note: noteCtrl.text.trim().isEmpty ? null : noteCtrl.text.trim(),
+        ),
+      );
+      _refreshProject();
+    } catch (e) {
+      await _handleStatusError(e);
+    }
+  }
+
+  Future<void> _deletePayment(Project project, Payment payment) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ödemeyi sil'),
+        content: Text('${formatMoney(payment.amount)} silinsin mi?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sil')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await _customerApi.deletePayment(project.id, payment.id);
+      _refreshProject();
+    } catch (e) {
+      await _handleStatusError(e);
+    }
+  }
+
+  Future<void> _shareReceipt(Project project, Payment payment) async {
+    try {
+      final company = await CompanyApi().getCompany();
+      final balance = _payments?.balance ?? project.balance;
+      await ReceiptPdf().share(
+        company: company,
+        project: project,
+        payment: payment,
+        balanceAfter: balance,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e'), backgroundColor: Colors.red));
+    }
+  }
+
+  Widget _statusStrip(Project project) {
+    final nextLabel = project.status.nextForwardActionLabel;
+    return Material(
+      color: project.status.color.withValues(alpha: 0.12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            StatusBadge(status: project.status),
+            const Spacer(),
+            if (nextLabel != null)
+              FilledButton(
+                onPressed: () => _onNextStep(project),
+                child: Text(nextLabel),
+              ),
+            PopupMenuButton<String>(
+              onSelected: (v) {
+                if (v == 'history') {
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => ProjectHistoryScreen(projectId: project.id)));
+                } else if (v == 'delivery') {
+                  _setDeliveryDate(project);
+                } else if (v == 'revert') {
+                  _revert(project);
+                } else if (v == 'cancel') {
+                  _cancel(project);
+                }
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'history', child: Text('Geçmiş')),
+                const PopupMenuItem(value: 'delivery', child: Text('Teslim tarihi')),
+                if (_isAdmin && project.status.previous != null)
+                  const PopupMenuItem(value: 'revert', child: Text('Geri al')),
+                if (_isAdmin && project.status != ProjectStatus.cancelled)
+                  const PopupMenuItem(value: 'cancel', child: Text('İptal et')),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _paymentsSection(Project project) {
+    final sum = _payments;
+    final target = sum?.targetTotal ?? project.collectionTarget;
+    final paid = sum?.paidTotal ?? project.paidTotal;
+    final balance = sum?.balance ?? project.balance;
+    final items = sum?.items ?? const <Payment>[];
+
+    return Card(
+      margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Text('Tahsilat', style: Theme.of(context).textTheme.titleMedium),
+                const Spacer(),
+                TextButton(onPressed: () => _paymentDialog(project, refund: false), child: const Text('Ödeme al')),
+                TextButton(onPressed: () => _paymentDialog(project, refund: true), child: const Text('İade')),
+              ],
+            ),
+            Text('Hedef: ${formatMoney(target)} · Ödenen: ${formatMoney(paid)} · Kalan: ${formatMoney(balance)}',
+                style: const TextStyle(fontSize: 13)),
+            const Divider(),
+            if (items.isEmpty)
+              const Text('Ödeme yok.', style: TextStyle(color: Colors.grey))
+            else
+              ...items.map((p) {
+                final red = p.isRefund;
+                return ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    '${formatDate(p.paidAt)} · ${paymentMethodTr(p.method)}',
+                    style: TextStyle(color: red ? Colors.red : null),
+                  ),
+                  subtitle: (p.note ?? '').isEmpty ? null : Text(p.note!),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        formatMoney(p.signedAmount),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: red ? Colors.red : Colors.green.shade800,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.receipt_long, size: 20),
+                        tooltip: 'Makbuz',
+                        onPressed: () => _shareReceipt(project, p),
+                      ),
+                      if (_isAdmin)
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
+                          onPressed: () => _deletePayment(project, p),
+                        ),
+                    ],
+                  ),
+                );
+              }),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Project?>(
       future: _projectFuture,
       builder: (context, snapshot) {
-        // Veri Yükleniyor...
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
           return Scaffold(appBar: AppBar(title: const Text("Yükleniyor...")), body: const Center(child: CircularProgressIndicator()));
         }
-        
-        // Hata veya Veri Yok
+
         if (!snapshot.hasData || snapshot.data == null) {
           return Scaffold(appBar: AppBar(title: const Text("Hata")), body: const Center(child: Text("Proje bulunamadı.")));
         }
 
         final project = snapshot.data!;
-        
+
         return Scaffold(
           appBar: AppBar(
             title: Text(project.name),
             actions: [
-              // 1. PDF PAYLAŞ BUTONU (Resimdeki Paylaş butonu yerine)
               IconButton(
                 icon: const Icon(Icons.picture_as_pdf),
                 tooltip: 'Teklif / PDF',
                 onPressed: _openQuote,
               ),
-              
-              // 2. ÜÇ NOKTA MENÜSÜ (Edit Item Specs, Delete Item...)
               PopupMenuButton<String>(
                 onSelected: (value) {
                   if (value == 'edit') _showEditProjectDialog(project);
@@ -383,63 +815,42 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     );
                   }
                   if (value == 'cost_report') _openCostReport();
+                  if (value == 'history') {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => ProjectHistoryScreen(projectId: project.id)));
+                  }
                 },
                 itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
                   const PopupMenuItem<String>(
                     value: 'edit',
-                    child: ListTile(
-                      leading: Icon(Icons.edit),
-                      title: Text('Proje Bilgileri'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
+                    child: ListTile(leading: Icon(Icons.edit), title: Text('Proje Bilgileri'), contentPadding: EdgeInsets.zero),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'history',
+                    child: ListTile(leading: Icon(Icons.history), title: Text('Geçmiş'), contentPadding: EdgeInsets.zero),
                   ),
                   const PopupMenuItem<String>(
                     value: 'specs',
-                    child: ListTile(
-                      leading: Icon(Icons.assignment),
-                      title: Text('Teknik Özellikler'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
+                    child: ListTile(leading: Icon(Icons.assignment), title: Text('Teknik Özellikler'), contentPadding: EdgeInsets.zero),
                   ),
                   const PopupMenuItem<String>(
                     value: 'production',
-                    child: ListTile(
-                      leading: Icon(Icons.precision_manufacturing),
-                      title: Text('Üretim'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
+                    child: ListTile(leading: Icon(Icons.precision_manufacturing), title: Text('Üretim'), contentPadding: EdgeInsets.zero),
                   ),
                   const PopupMenuItem<String>(
                     value: 'cost',
-                    child: ListTile(
-                      leading: Icon(Icons.price_check),
-                      title: Text('Maliyet / Özet'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
+                    child: ListTile(leading: Icon(Icons.price_check), title: Text('Maliyet / Özet'), contentPadding: EdgeInsets.zero),
                   ),
                   const PopupMenuItem<String>(
                     value: 'cost_report',
-                    child: ListTile(
-                      leading: Icon(Icons.analytics_outlined),
-                      title: Text('İç maliyet raporu'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
+                    child: ListTile(leading: Icon(Icons.analytics_outlined), title: Text('İç maliyet raporu'), contentPadding: EdgeInsets.zero),
                   ),
                   const PopupMenuItem<String>(
                     value: 'export',
-                    child: ListTile(
-                      leading: Icon(Icons.download),
-                      title: Text('Dışa aktar (.iwd)'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
+                    child: ListTile(leading: Icon(Icons.download), title: Text('Dışa aktar (.iwd)'), contentPadding: EdgeInsets.zero),
                   ),
                   const PopupMenuItem<String>(
                     value: 'sync_prices',
-                    child: ListTile(
-                      leading: Icon(Icons.sync, color: Colors.orange),
-                      title: Text('Fiyatları Güncelle'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
+                    child: ListTile(leading: Icon(Icons.sync, color: Colors.orange), title: Text('Fiyatları Güncelle'), contentPadding: EdgeInsets.zero),
                   ),
                   const PopupMenuDivider(),
                   const PopupMenuItem<String>(
@@ -460,7 +871,19 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           ),
           body: Column(
             children: [
-              // ÜST BİLGİ KARTI (Özet)
+              _statusStrip(project),
+              if (project.priceChangedAfterApproval)
+                Material(
+                  color: Colors.amber.shade100,
+                  child: ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.warning_amber, color: Colors.orange),
+                    title: Text(
+                      'Onaydan sonra fiyat değişti: onaylanan ${formatMoney(project.approvedTotal ?? 0)}, güncel ${formatMoney(project.displaySaleTotal)}',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                ),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(15),
@@ -469,6 +892,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text("Açıklama: ${project.description}", style: TextStyle(color: Colors.grey[800])),
+                    if ((project.customerName ?? '').isNotEmpty)
+                      Text('Müşteri: ${project.customerName}', style: const TextStyle(fontSize: 13)),
+                    if (project.deliveryDate != null)
+                      Text('Teslim: ${formatDate(project.deliveryDate)}', style: const TextStyle(fontSize: 13)),
                     const SizedBox(height: 5),
                     Text(
                       'Toplam (KDV hariç): ${formatMoney(project.displaySaleTotal)}',
@@ -477,32 +904,30 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   ],
                 ),
               ),
-
-              // PENCERE LİSTESİ (GRID)
+              _paymentsSection(project),
               Expanded(
-                child: project.windowUnits.isEmpty 
-                  ? const Center(child: Text("Henüz pencere yok.")) 
-                  : GridView.builder(
-                      padding: const EdgeInsets.all(10),
-                      // Telefonda 2, masaüstünde ekran genişliğine göre daha fazla sütun
-                      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 240,
-                        crossAxisSpacing: 10,
-                        mainAxisSpacing: 10,
-                        childAspectRatio: 0.85,
+                child: project.windowUnits.isEmpty
+                    ? const Center(child: Text("Henüz pencere yok."))
+                    : GridView.builder(
+                        padding: const EdgeInsets.all(10),
+                        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 240,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                          childAspectRatio: 0.85,
+                        ),
+                        itemCount: project.windowUnits.length,
+                        itemBuilder: (context, index) {
+                          final unit = project.windowUnits[index];
+                          return InkWell(
+                            borderRadius: BorderRadius.circular(8),
+                            onTap: () => _openEditor(unit.id, unit.name),
+                            onLongPress: () => _showWindowActions(unit),
+                            onSecondaryTap: () => _showWindowActions(unit),
+                            child: DesignThumbnail.unit(unit, catalog: _catalog),
+                          );
+                        },
                       ),
-                      itemCount: project.windowUnits.length,
-                      itemBuilder: (context, index) {
-                        final unit = project.windowUnits[index];
-                        return InkWell(
-                          borderRadius: BorderRadius.circular(8),
-                          onTap: () => _openEditor(unit.id, unit.name),
-                          onLongPress: () => _showWindowActions(unit),
-                          onSecondaryTap: () => _showWindowActions(unit),
-                          child: DesignThumbnail.unit(unit, catalog: _catalog),
-                        );
-                      },
-                    ),
               ),
             ],
           ),

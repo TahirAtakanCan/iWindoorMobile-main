@@ -2,12 +2,19 @@ import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import '../models/customer.dart';
+import '../models/dashboard.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../services/customer_api.dart';
 import '../services/design_api.dart';
 import '../services/project_file_api.dart';
 import '../models/project.dart';
 import '../utils/format.dart';
+import '../utils/status.dart';
+import '../widgets/status_badge.dart';
+import 'customers/customer_list_screen.dart';
+import 'customers/customer_picker.dart';
 import 'project_detail_screen.dart';
 import 'catalog/catalog_screen.dart';
 import 'company_settings_screen.dart';
@@ -23,20 +30,20 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final ApiService _apiService = ApiService();
+  final CustomerApi _customerApi = CustomerApi();
   late Future<List<Project>> _projectsFuture;
-  
-  // Kullanıcı bilgilerini tutacak değişkenler
+  DashboardSummary? _dashboard;
+  ProjectStatus? _statusFilter;
   String _userName = "Yükleniyor...";
   String _userEmail = "";
 
   @override
   void initState() {
     super.initState();
-    _refreshProjects();
-    _loadUserInfo(); // Ekran açılınca kullanıcı bilgilerini çek
+    _refreshAll();
+    _loadUserInfo();
   }
 
-  // Bilgileri servisten (SharedPreferences) al
   void _loadUserInfo() async {
     final info = await AuthService().getUserInfo();
     if (mounted) {
@@ -49,11 +56,27 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _refreshProjects() {
     setState(() {
-      _projectsFuture = _apiService.getAllProjects();
+      _projectsFuture = _apiService.getAllProjects(
+        status: _statusFilter?.apiValue,
+      );
     });
   }
 
-  // Yeni Proje Oluşturma Dialogu
+  Future<void> _refreshAll() async {
+    _refreshProjects();
+    try {
+      final dash = await _customerApi.dashboard();
+      if (mounted) setState(() => _dashboard = dash);
+    } catch (_) {
+      // Dashboard opsiyonel; proje listesi yeterli.
+    }
+  }
+
+  void _setStatusFilter(ProjectStatus? status) {
+    setState(() => _statusFilter = status);
+    _refreshProjects();
+  }
+
   void _showCreateDialog() {
     final nameController = TextEditingController();
     final descController = TextEditingController();
@@ -61,64 +84,85 @@ class _HomeScreenState extends State<HomeScreen> {
     final customerPhone = TextEditingController();
     final customerEmail = TextEditingController();
     final customerAddress = TextEditingController();
+    Customer? selectedCustomer;
 
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text("Yeni Proje"),
-          content: SizedBox(
-            width: 420,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: nameController,
-                    decoration: const InputDecoration(labelText: "Proje Adı *", hintText: "Örn: Ahmet Bey Villası"),
+        return StatefulBuilder(
+          builder: (context, setLocal) {
+            return AlertDialog(
+              title: const Text("Yeni Proje"),
+              content: SizedBox(
+                width: 420,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(labelText: "Proje Adı *", hintText: "Örn: Ahmet Bey Villası"),
+                      ),
+                      TextField(
+                        controller: descController,
+                        decoration: const InputDecoration(labelText: "Açıklama", hintText: "Örn: Mutfak tadilatı"),
+                      ),
+                      const SizedBox(height: 8),
+                      const Align(alignment: Alignment.centerLeft, child: Text("Müşteri", style: TextStyle(fontWeight: FontWeight.bold))),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          final c = await pickCustomer(context, current: selectedCustomer);
+                          if (c == null) return;
+                          setLocal(() {
+                            selectedCustomer = c;
+                            customerName.text = c.name;
+                            customerPhone.text = c.phone ?? '';
+                            customerEmail.text = c.email ?? '';
+                            customerAddress.text = c.address ?? '';
+                          });
+                        },
+                        icon: const Icon(Icons.person_search),
+                        label: Text(selectedCustomer == null ? 'Müşteri seç' : selectedCustomer!.name),
+                      ),
+                      TextField(controller: customerName, decoration: const InputDecoration(labelText: "Müşteri adı")),
+                      TextField(controller: customerPhone, decoration: const InputDecoration(labelText: "Telefon")),
+                      TextField(controller: customerEmail, decoration: const InputDecoration(labelText: "E-posta"), keyboardType: TextInputType.emailAddress),
+                      TextField(controller: customerAddress, decoration: const InputDecoration(labelText: "Adres"), maxLines: 2),
+                    ],
                   ),
-                  TextField(
-                    controller: descController,
-                    decoration: const InputDecoration(labelText: "Açıklama", hintText: "Örn: Mutfak tadilatı"),
-                  ),
-                  const SizedBox(height: 8),
-                  const Align(alignment: Alignment.centerLeft, child: Text("Müşteri", style: TextStyle(fontWeight: FontWeight.bold))),
-                  TextField(controller: customerName, decoration: const InputDecoration(labelText: "Müşteri adı")),
-                  TextField(controller: customerPhone, decoration: const InputDecoration(labelText: "Telefon")),
-                  TextField(controller: customerEmail, decoration: const InputDecoration(labelText: "E-posta"), keyboardType: TextInputType.emailAddress),
-                  TextField(controller: customerAddress, decoration: const InputDecoration(labelText: "Adres"), maxLines: 2),
-                ],
+                ),
               ),
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("İptal")),
-            ElevatedButton(
-              onPressed: () async {
-                if (nameController.text.trim().isEmpty) return;
-                Navigator.pop(context);
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text("İptal")),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (nameController.text.trim().isEmpty) return;
+                    Navigator.pop(context);
 
-                final newProject = await _apiService.createProject(
-                  nameController.text.trim(),
-                  descController.text.trim(),
-                  customerName: customerName.text.trim(),
-                  customerPhone: customerPhone.text.trim(),
-                  customerEmail: customerEmail.text.trim(),
-                  customerAddress: customerAddress.text.trim(),
-                );
+                    final newProject = await _apiService.createProject(
+                      nameController.text.trim(),
+                      descController.text.trim(),
+                      customerId: selectedCustomer?.id,
+                      customerName: customerName.text.trim(),
+                      customerPhone: customerPhone.text.trim(),
+                      customerEmail: customerEmail.text.trim(),
+                      customerAddress: customerAddress.text.trim(),
+                    );
 
-                if (newProject != null) {
-                  _refreshProjects();
-                  if (!mounted) return;
-                  Navigator.push(
-                    this.context,
-                    MaterialPageRoute(builder: (context) => ProjectDetailScreen(projectId: newProject.id)),
-                  );
-                }
-              },
-              child: const Text("Oluştur"),
-            ),
-          ],
+                    if (newProject != null) {
+                      _refreshAll();
+                      if (!mounted) return;
+                      Navigator.push(
+                        this.context,
+                        MaterialPageRoute(builder: (context) => ProjectDetailScreen(projectId: newProject.id)),
+                      );
+                    }
+                  },
+                  child: const Text("Oluştur"),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -139,13 +183,13 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
       final project = await ProjectFileApi().importProject(content);
-      _refreshProjects();
+      _refreshAll();
       if (!mounted) return;
       await Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => ProjectDetailScreen(projectId: project.id)),
       );
-      _refreshProjects();
+      _refreshAll();
     } catch (e) {
       debugPrint('İçe aktarma hatası: $e');
       if (!mounted) return;
@@ -153,6 +197,56 @@ class _HomeScreenState extends State<HomeScreen> {
         SnackBar(content: Text(ApiError.from(e).message), backgroundColor: Colors.red),
       );
     }
+  }
+
+  Map<ProjectStatus, int> _countsFrom(List<Project> projects, DashboardSummary? dash) {
+    if (dash != null && dash.statusCounts.isNotEmpty) return dash.statusCounts;
+    final m = <ProjectStatus, int>{};
+    for (final p in projects) {
+      m[p.status] = (m[p.status] ?? 0) + 1;
+    }
+    return m;
+  }
+
+  Widget _dashCard(String title, String value, Color color, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        width: 140,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withValues(alpha: 0.35)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: TextStyle(fontSize: 12, color: Colors.grey.shade800)),
+            const SizedBox(height: 6),
+            Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _deliveryTile(Project p, {required bool overdue}) {
+    return ListTile(
+      dense: true,
+      leading: Icon(Icons.event, color: overdue ? Colors.red : Colors.orange),
+      title: Text(p.name),
+      subtitle: Text('Teslim: ${formatDate(p.deliveryDate)}'),
+      trailing: StatusBadge(status: p.status, compact: true),
+      onTap: () async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => ProjectDetailScreen(projectId: p.id)),
+        );
+        _refreshAll();
+      },
+    );
   }
 
   @override
@@ -178,12 +272,9 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      
-      // --- YAN MENÜ (DRAWER) ---
       drawer: Drawer(
         child: Column(
           children: [
-            // Üst Başlık (Header)
             UserAccountsDrawerHeader(
               accountName: Text(
                 _userName,
@@ -199,14 +290,20 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               decoration: BoxDecoration(color: Colors.blue.shade800),
             ),
-            
-            // Menü Öğeleri
+            ListTile(
+              leading: const Icon(Icons.people_outline),
+              title: const Text("Müşteriler"),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const CustomerListScreen()));
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.settings_applications),
               title: const Text("Katalog ve Fiyatlar"),
               subtitle: const Text("Profil, cam, aksesuar, donanım"),
               onTap: () {
-                Navigator.pop(context); // Menüyü kapat
+                Navigator.pop(context);
                 Navigator.push(context, MaterialPageRoute(builder: (context) => const CatalogScreen()));
               },
             ),
@@ -223,7 +320,7 @@ class _HomeScreenState extends State<HomeScreen> {
               leading: const Icon(Icons.people),
               title: const Text("Çalışanlar"),
               onTap: () {
-                Navigator.pop(context); // Menüyü kapat
+                Navigator.pop(context);
                 Navigator.push(context, MaterialPageRoute(builder: (context) => const EmployeeListScreen()));
               },
             ),
@@ -231,29 +328,23 @@ class _HomeScreenState extends State<HomeScreen> {
               leading: const Icon(Icons.info_outline),
               title: const Text("Hakkımızda"),
               onTap: () {
-                 Navigator.pop(context);
-                 showAboutDialog(
-                   context: context, 
-                   applicationName: "iWindoor Mobile",
-                   applicationVersion: "1.0.0",
-                   children: [const Text("Profesyonel Pencere ve Kapı Çizim Sistemi.")]
-                 );
+                Navigator.pop(context);
+                showAboutDialog(
+                  context: context,
+                  applicationName: "iWindoor Mobile",
+                  applicationVersion: "1.0.0",
+                  children: [const Text("Profesyonel Pencere ve Kapı Çizim Sistemi.")],
+                );
               },
             ),
-            
-            const Spacer(), // Geriye kalan boşluğu iterek çıkış butonunu alta yaslar
-            
+            const Spacer(),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),
               title: const Text("Çıkış Yap", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
               onTap: () async {
-                Navigator.pop(context); // Menüyü kapat
-                
-                // Çıkış yap
+                Navigator.pop(context);
                 await AuthService().logout();
-                
-                // Login ekranına yönlendir ve geri dönüşü engelle
                 if (context.mounted) {
                   Navigator.pushAndRemoveUntil(
                     context,
@@ -263,99 +354,162 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
               },
             ),
-            const SizedBox(height: 20), // En alttan biraz boşluk
+            const SizedBox(height: 20),
           ],
         ),
       ),
-      
       floatingActionButton: FloatingActionButton(
         onPressed: _showCreateDialog,
         child: const Icon(Icons.add),
       ),
-      // ... Body kısmı (Liste) AYNI KALSIN ...
       body: FutureBuilder<List<Project>>(
-         // ... (Eski body kodlarının aynısı buraya gelecek)
-         future: _projectsFuture,
-         builder: (context, snapshot) {
-            // ... (Kopyala yapıştır yaparken burayı bozmamaya dikkat et)
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            } else if (snapshot.hasError) {
-              return Center(child: Text("Hata: ${snapshot.error}"));
-            } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-               return const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.folder_open, size: 80, color: Colors.grey),
-                    SizedBox(height: 10),
-                    Text("Henüz proje yok.\nArtıya basarak oluşturabilirsin!", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
-                  ],
-                ),
-              );
-            }
-            
-            final projects = snapshot.data!;
-            
-             return ListView.builder(
+        future: _projectsFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          } else if (snapshot.hasError) {
+            return Center(child: Text("Hata: ${snapshot.error}"));
+          }
+
+          final projects = snapshot.data ?? const <Project>[];
+          final counts = _countsFrom(projects, _dashboard);
+          final dash = _dashboard;
+
+          return RefreshIndicator(
+            onRefresh: _refreshAll,
+            child: ListView(
               padding: const EdgeInsets.all(10),
-              itemCount: projects.length,
-              itemBuilder: (context, index) {
-                final project = projects[index];
-                return Card(
-                  elevation: 3,
-                  margin: const EdgeInsets.symmetric(vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.all(15),
-                    leading: CircleAvatar(
-                      backgroundColor: Colors.blue.shade100,
-                      child: Text(project.name.isNotEmpty ? project.name[0].toUpperCase() : "?"),
-                    ),
-                    title: Text(project.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (dash != null) ...[
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
                       children: [
-                        Text(project.description),
-                        const SizedBox(height: 5),
-                        Text(
-                          "${project.windowUnits.length} Pencere", 
-                          style: TextStyle(fontSize: 12, color: Colors.grey[600])
-                        ),
+                        _dashCard('Teklif bekleyen', '${dash.quoteCount}', Colors.grey.shade700, () => _setStatusFilter(ProjectStatus.quote)),
+                        const SizedBox(width: 8),
+                        _dashCard('Üretimde', '${dash.productionCount}', Colors.orange, () => _setStatusFilter(ProjectStatus.production)),
+                        const SizedBox(width: 8),
+                        _dashCard('Montajda', '${dash.installationCount}', Colors.purple, () => _setStatusFilter(ProjectStatus.installation)),
+                        const SizedBox(width: 8),
+                        _dashCard('Toplam alacak', formatMoney(dash.totalReceivable), Colors.deepOrange, () {}),
+                        const SizedBox(width: 8),
+                        _dashCard('Bu ay onaylanan', formatMoney(dash.approvedThisMonth), Colors.blue, () => _setStatusFilter(ProjectStatus.approved)),
                       ],
                     ),
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          formatMoney(project.displaySaleTotal),
-                          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16),
-                        ),
-                        const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
-                      ],
-                    ),
-                    onTap: () async {
-                      // Detay Ekranına (Galeriye) Git
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ProjectDetailScreen(
-                            projectId: project.id,
-                          ),
-                        ),
-                      );
-                      _refreshProjects();
-                    },
                   ),
-                );
-              },
-            );
-         }
+                  if (dash.overdueDeliveries.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text('Geciken teslimler', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red.shade700)),
+                    ...dash.overdueDeliveries.map((p) => _deliveryTile(p, overdue: true)),
+                  ],
+                  if (dash.upcomingDeliveries.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    const Text('Yaklaşan teslimler', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ...dash.upcomingDeliveries.map((p) => _deliveryTile(p, overdue: false)),
+                  ],
+                  const SizedBox(height: 8),
+                ],
+                Builder(builder: (_) {
+                  final totalCount = counts.values.fold<int>(0, (a, b) => a + b);
+                  final allLabel = totalCount > 0 ? totalCount : projects.length;
+                  return SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        FilterChip(
+                          label: Text('Tümü ($allLabel)'),
+                          selected: _statusFilter == null,
+                          onSelected: (_) => _setStatusFilter(null),
+                        ),
+                        const SizedBox(width: 6),
+                        for (final s in ProjectStatus.allOrdered) ...[
+                          FilterChip(
+                            label: Text('${s.labelTr} (${counts[s] ?? 0})'),
+                            selected: _statusFilter == s,
+                            selectedColor: s.color.withValues(alpha: 0.25),
+                            onSelected: (_) => _setStatusFilter(s),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                      ],
+                    ),
+                  );
+                }),
+                const SizedBox(height: 8),
+                if (projects.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 40),
+                    child: Center(
+                      child: Column(
+                        children: [
+                          Icon(Icons.folder_open, size: 80, color: Colors.grey),
+                          SizedBox(height: 10),
+                          Text("Henüz proje yok.\nArtıya basarak oluşturabilirsin!", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  ...projects.map((project) {
+                    final approved = project.status == ProjectStatus.approved ||
+                        project.status == ProjectStatus.production ||
+                        project.status == ProjectStatus.installation ||
+                        project.status == ProjectStatus.delivered;
+                    return Card(
+                      elevation: 3,
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.all(15),
+                        leading: CircleAvatar(
+                          backgroundColor: project.status.color.withValues(alpha: 0.2),
+                          child: Text(project.name.isNotEmpty ? project.name[0].toUpperCase() : "?"),
+                        ),
+                        title: Row(
+                          children: [
+                            Expanded(child: Text(project.name, style: const TextStyle(fontWeight: FontWeight.bold))),
+                            StatusBadge(status: project.status, compact: true),
+                          ],
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(project.description),
+                            const SizedBox(height: 4),
+                            Text(
+                              "${project.windowUnits.length} Pencere",
+                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                            ),
+                            if (project.deliveryDate != null)
+                              Text('Teslim: ${formatDate(project.deliveryDate)}', style: const TextStyle(fontSize: 12)),
+                            if (approved && project.balance > 0)
+                              Text(
+                                'Kalan: ${formatMoney(project.balance)}',
+                                style: const TextStyle(fontSize: 12, color: Colors.orange, fontWeight: FontWeight.w600),
+                              ),
+                          ],
+                        ),
+                        trailing: Text(
+                          formatMoney(project.displaySaleTotal),
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 15),
+                        ),
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ProjectDetailScreen(projectId: project.id),
+                            ),
+                          );
+                          _refreshAll();
+                        },
+                      ),
+                    );
+                  }),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
 }
-
-//SON GÜNCEL BAZLI FİYAT DEĞİŞİKLİĞİ YAPMAK İSTER MİSİNİSİNİZ SORUSU ?
-//PROJEYE GÖRE FİYAT DEĞİŞİKLİĞİ YAPILABİLİR.

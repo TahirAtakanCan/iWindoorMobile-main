@@ -69,3 +69,19 @@ String profileRoleTr(String? role) => switch ((role ?? '').toUpperCase()) {
       'ADAPTER' => 'Adaptör',
       _ => role ?? 'Profil',
     };
+
+/// dd.MM.yyyy
+String formatDate(DateTime? d) {
+  if (d == null) return '—';
+  final dd = d.day.toString().padLeft(2, '0');
+  final mm = d.month.toString().padLeft(2, '0');
+  return '$dd.$mm.${d.year}';
+}
+
+/// dd.MM.yyyy HH:mm
+String formatDateTime(DateTime? d) {
+  if (d == null) return '—';
+  final hh = d.hour.toString().padLeft(2, '0');
+  final mi = d.minute.toString().padLeft(2, '0');
+  return '${formatDate(d)} $hh:$mi';
+}

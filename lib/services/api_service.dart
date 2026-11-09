@@ -125,12 +125,16 @@ class ApiService {
   }
 
   // 1. Tüm Projeleri Çek
-  Future<List<Project>> getAllProjects() async {
+  Future<List<Project>> getAllProjects({String? status, int? customerId}) async {
     try {
-      final response = await _dio.get('/projects');
+      final response = await _dio.get('/projects', queryParameters: {
+        if (status != null && status.isNotEmpty) 'status': status,
+        if (customerId != null) 'customerId': customerId,
+      });
       if (response.statusCode == 200) {
-        var list = response.data as List;
-        return list.map((i) => Project.fromJson(i)).toList();
+        final raw = response.data;
+        final list = raw is List ? raw : (raw is Map ? (raw['items'] as List? ?? const []) : const []);
+        return list.map((i) => Project.fromJson(Map<String, dynamic>.from(i as Map))).toList();
       }
       return [];
     } catch (e) {
@@ -147,18 +151,20 @@ class ApiService {
     String? customerPhone,
     String? customerEmail,
     String? customerAddress,
+    int? customerId,
   }) async {
     try {
       final response = await _dio.post('/projects', data: {
         "name": name,
         "description": description,
+        if (customerId != null) "customerId": customerId,
         if (customerName != null && customerName.isNotEmpty) "customerName": customerName,
         if (customerPhone != null && customerPhone.isNotEmpty) "customerPhone": customerPhone,
         if (customerEmail != null && customerEmail.isNotEmpty) "customerEmail": customerEmail,
         if (customerAddress != null && customerAddress.isNotEmpty) "customerAddress": customerAddress,
       });
       
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         return Project.fromJson(response.data);
       }
       return null;
@@ -192,6 +198,7 @@ class ApiService {
     String? customerPhone,
     String? customerEmail,
     String? customerAddress,
+    int? customerId,
   }) async {
     try {
       final response = await _dio.put('/projects/$id', data: {
@@ -201,6 +208,7 @@ class ApiService {
         "customerPhone": customerPhone,
         "customerEmail": customerEmail,
         "customerAddress": customerAddress,
+        if (customerId != null) "customerId": customerId,
       });
       return response.statusCode == 200;
     } catch (e) {

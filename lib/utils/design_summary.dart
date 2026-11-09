@@ -1,5 +1,7 @@
 import 'package:windoor_core/windoor_core.dart';
 
+import '../models/catalog.dart';
+
 /// Müşteri teklifi için kısa tasarım özeti (cam / açılım).
 class DesignSummary {
   final List<String> glassCodes;
@@ -11,9 +13,15 @@ class DesignSummary {
   String get openingLabel => openings.isEmpty ? 'Sabit' : openings.join(', ');
 }
 
-DesignSummary summarizeDesign(WindowDesign design) {
+DesignSummary summarizeDesign(WindowDesign design, {CatalogSnapshot? catalog}) {
   final glasses = <String>{};
   final openings = <String>{};
+
+  String glassName(String code) {
+    if (code.isEmpty) return '—';
+    final g = catalog?.glassByCode(code);
+    return (g?.name.trim().isNotEmpty == true) ? g!.name : code;
+  }
 
   void walk(DesignNode n) {
     switch (n) {
@@ -28,7 +36,7 @@ DesignSummary summarizeDesign(WindowDesign design) {
           walk(c);
         }
       case SashNode s:
-        openings.add(_openingTr(s.opening));
+        openings.add(s.passive ? 'Pasif kanat' : _openingTr(s.opening));
         walk(s.child);
       case SlideNode s:
         openings.add('Sürme');
@@ -36,9 +44,9 @@ DesignSummary summarizeDesign(WindowDesign design) {
         walk(s.right);
       case FillNode f:
         if (f.fill == FillType.panel) {
-          glasses.add(f.glassCode.isEmpty ? 'Panel' : 'Panel (${f.glassCode})');
+          glasses.add(f.glassCode.isEmpty ? 'Panel' : 'Panel (${glassName(f.glassCode)})');
         } else if (f.glassCode.isNotEmpty) {
-          glasses.add(f.glassCode);
+          glasses.add(glassName(f.glassCode));
         }
     }
   }

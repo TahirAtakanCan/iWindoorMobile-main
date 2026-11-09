@@ -11,6 +11,7 @@ import '../drawing/glass_look.dart';
 import '../models/catalog.dart';
 import '../models/project_quote.dart';
 import '../pdf/pdf_window_drawing.dart';
+import '../utils/cost_breakdown.dart';
 import '../utils/design_summary.dart';
 import '../utils/format.dart';
 
@@ -123,27 +124,14 @@ class PdfService {
     pw.Font? bold,
     bool compress = true,
   }) async {
-    final cost = q.costSummary;
-    if (cost == null) {
+    if (q.costSummary == null) {
       throw StateError('Maliyet özeti yok.');
     }
+    final cost = enrichCostSummary(q);
     final font = base ?? await PdfGoogleFonts.robotoRegular();
     final fontBold = bold ?? await PdfGoogleFonts.robotoBold();
     final pdf = pw.Document(theme: pw.ThemeData.withFont(base: font, bold: fontBold), compress: compress);
-    final rows = cost.windows.isNotEmpty
-        ? cost.windows
-        : [
-            for (final w in q.windows)
-              CostWindowRow(
-                windowId: w.windowId,
-                name: w.name,
-                material: (w.materialUnitPrice ?? 0) * w.quantity,
-                labor: 0,
-                install: 0,
-                sale: w.lineTotal,
-                profit: w.lineTotal - (w.materialUnitPrice ?? 0) * w.quantity,
-              ),
-          ];
+    final rows = cost.windows;
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
@@ -164,7 +152,7 @@ class PdfService {
               ['Montaj', formatMoney(cost.installTotal)],
               ['Satış ara toplam', formatMoney(cost.saleSubtotal)],
               ['Brüt kâr', formatMoney(cost.grossProfit)],
-              ['Brüt kâr %', '%${_pct(cost.grossProfitPct)}'],
+              ['Brüt kâr %', formatProfitPct(cost.grossProfitPct)],
             ],
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
             headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey800),
@@ -301,7 +289,7 @@ class PdfService {
         : seriesForWindow(catalog, w).name;
     final colorLabel = _colorTitle(catalog, w.design.colorCode) ?? 'Beyaz';
     final profileColor = _profileColor(catalog, w.design.colorCode);
-    final summary = summarizeDesign(w.design);
+    final summary = summarizeDesign(w.design, catalog: catalog);
     return [
       pw.Text(w.name, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
       pw.SizedBox(height: 4),

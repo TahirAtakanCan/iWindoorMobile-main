@@ -40,6 +40,7 @@ String bomGroupTr(String group) => switch (group.trim().toUpperCase()) {
       'PANEL' => 'Panel',
       'HARDWARE' => 'Donanım',
       'ACCESSORY' => 'Aksesuar',
+      'COLOR' => 'Renk farkı',
       _ => group,
     };
 
@@ -64,6 +65,7 @@ String profileRoleTr(String? role) => switch ((role ?? '').toUpperCase()) {
       'DOOR_SASH' => 'Kapı kanadı',
       'SLIDE_SASH' => 'Sürme kanat',
       'MULLION' => 'Orta kayıt',
+      'COUPLING' => 'Birleştirme profili',
       'ADAPTER' => 'Adaptör',
       _ => role ?? 'Profil',
     };

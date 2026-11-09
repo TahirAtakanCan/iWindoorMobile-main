@@ -2,8 +2,9 @@ import 'package:windoor_core/windoor_core.dart';
 
 import '../services/design_api.dart';
 
-/// Atölye kesim listesi sırası: Kasa → Eşik → Kanat → Kapı → Sürme → Orta kayıt → Adaptör → Çıta → Dubleks.
+/// Atölye kesim listesi sırası: Kasa → Eşik → Kanat → Kapı → Sürme → Orta kayıt → Birleştirme → Adaptör → Çıta → Dubleks.
 int cutListRank(BomLine l) {
+  if (l.group == BomGroup.color) return 100; // kesim tablosunda gösterilmez
   if (l.group == BomGroup.profile) {
     return switch (l.role) {
       ProfileRole.frame => 0,
@@ -12,12 +13,13 @@ int cutListRank(BomLine l) {
       ProfileRole.doorSash => 3,
       ProfileRole.slideSash => 4,
       ProfileRole.mullion => 5,
-      ProfileRole.adapter => 6,
-      null => 7,
+      ProfileRole.coupling => 6,
+      ProfileRole.adapter => 7,
+      null => 8,
     };
   }
-  if (l.group == BomGroup.bead) return 8;
-  if (l.group == BomGroup.duplex) return 9;
+  if (l.group == BomGroup.bead) return 9;
+  if (l.group == BomGroup.duplex) return 10;
   return 99;
 }
 
@@ -25,7 +27,9 @@ int cutListRank(BomLine l) {
 /// Çekirdek BOM değişmez; yalnızca gösterim.
 List<BomLine> workshopCutLines(Iterable<BomLine> bom) {
   final raw = bom.where(
-    (l) => l.group == BomGroup.profile || l.group == BomGroup.bead || l.group == BomGroup.duplex,
+    (l) =>
+        (l.group == BomGroup.profile || l.group == BomGroup.bead || l.group == BomGroup.duplex) &&
+        l.group != BomGroup.color,
   );
   final map = <String, BomLine>{};
   final order = <String>[];
@@ -48,7 +52,7 @@ List<BomLine> workshopCutLines(Iterable<BomLine> bom) {
   return list;
 }
 
-const _quoteGroupOrder = ['PROFILE', 'BEAD', 'DUPLEX', 'GLASS', 'PANEL', 'ACCESSORY', 'HARDWARE'];
+const _quoteGroupOrder = ['PROFILE', 'BEAD', 'DUPLEX', 'GLASS', 'PANEL', 'ACCESSORY', 'COLOR', 'HARDWARE'];
 
 int _quoteGroupRank(String group) {
   final i = _quoteGroupOrder.indexOf(group.trim().toUpperCase());

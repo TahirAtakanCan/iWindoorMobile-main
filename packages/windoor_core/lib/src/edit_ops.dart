@@ -24,6 +24,12 @@ class DesignOps {
   static Iterable<DesignNode> walk(DesignNode n) sync* {
     yield n;
     switch (n) {
+      case CoupleNode c:
+        for (final f in c.children) {
+          yield* walk(f);
+        }
+      case FrameNode f:
+        yield* walk(f.child);
       case SplitNode s:
         for (final c in s.children) {
           yield* walk(c);
@@ -46,6 +52,8 @@ class DesignOps {
   }
 
   static Iterable<DesignNode> _children(DesignNode n) => switch (n) {
+        CoupleNode c => c.children,
+        FrameNode f => [f.child],
         SplitNode s => s.children,
         SashNode s => [s.child],
         SlideNode s => [s.left, s.right],
@@ -116,6 +124,25 @@ class DesignOps {
   static DesignNode replace(DesignNode n, String id, DesignNode r) {
     if (n.id == id) return r;
     return switch (n) {
+      CoupleNode c => CoupleNode(
+          id: c.id,
+          dir: c.dir,
+          sizes: c.sizes,
+          children: [
+            for (final f in c.children)
+              () {
+                final x = replace(f, id, r);
+                return x is FrameNode ? x : f;
+              }(),
+          ],
+        ),
+      FrameNode f => FrameNode(
+          id: f.id,
+          bottom: f.bottom,
+          height: f.height,
+          width: f.width,
+          child: replace(f.child, id, r),
+        ),
       SplitNode s => SplitNode(
           id: s.id,
           dir: s.dir,
@@ -346,4 +373,159 @@ class DesignOps {
 
   static EditResult setBottom(WindowDesign d, BottomKind bottom) =>
       EditResult(d.copyWith(bottom: bottom), null);
+
+  // ---------------- birleşik kasa ----------------
+
+  /// Kasa ekleme yönü.
+  static const sideLeft = 'left';
+  static const sideRight = 'right';
+  static const sideTop = 'top';
+  static const sideBottom = 'bottom';
+
+  /// Yeni kasa ekler; tek kasayı couple'a çevirir veya aynı yönde couple'a ekler.
+  static EditResult addFrame(
+    WindowDesign d,
+    String side,
+    double sizeMm, {
+    double? height,
+    double? width,
+    BottomKind bottom = BottomKind.frame,
+    String glassCode = '',
+  }) {
+    final v = side == sideLeft || side == sideRight;
+    final dir = v ? SplitDir.v : SplitDir.h;
+    final ids = _nextIds(d.root, 4);
+    final newChild = FillNode(id: ids[2], glassCode: glassCode);
+    final newFrame = FrameNode(
+      id: ids[1],
+      bottom: bottom,
+      height: v ? height : null,
+      width: v ? null : width,
+      child: newChild,
+    );
+
+    if (d.root is! CoupleNode) {
+      final existing = FrameNode(id: ids[0], bottom: d.bottom, child: d.root);
+      final sizes = v
+          ? (side == sideLeft ? [sizeMm, d.width] : [d.width, sizeMm])
+          : (side == sideTop ? [sizeMm, d.height] : [d.height, sizeMm]);
+      final children = v
+          ? (side == sideLeft ? [newFrame, existing] : [existing, newFrame])
+          : (side == sideTop ? [newFrame, existing] : [existing, newFrame]);
+      return EditResult(
+        d.copyWith(
+          root: CoupleNode(id: ids[3], dir: dir, sizes: sizes, children: children),
+          width: v ? d.width + sizeMm : d.width,
+          height: v ? d.height : d.height + sizeMm,
+          bottom: BottomKind.frame,
+        ),
+        newChild.id,
+      );
+    }
+
+    final couple = d.root as CoupleNode;
+    if (couple.dir != dir) {
+      return EditResult(d, null, error: 'Farklı yönde birleşik doğrama üzerine kasa eklenemez.');
+    }
+    final atStart = side == sideLeft || side == sideTop;
+    final sizes = [...couple.sizes];
+    final children = [...couple.children];
+    if (atStart) {
+      sizes.insert(0, sizeMm);
+      children.insert(0, newFrame);
+    } else {
+      sizes.add(sizeMm);
+      children.add(newFrame);
+    }
+    return EditResult(
+      d.copyWith(
+        root: couple.copyWith(sizes: sizes, children: children),
+        width: v ? d.width + sizeMm : d.width,
+        height: v ? d.height : d.height + sizeMm,
+      ),
+      newChild.id,
+    );
+  }
+
+  static EditResult removeFrame(WindowDesign d, String frameId) {
+    final root = d.root;
+    if (root is! CoupleNode) return EditResult(d, frameId);
+    final idx = root.children.indexWhere((f) => f.id == frameId);
+    if (idx < 0) return EditResult(d, frameId);
+    if (root.children.length <= 2) {
+      final keep = root.children[idx == 0 ? 1 : 0];
+      final size = root.sizes[idx == 0 ? 1 : 0];
+      final w = root.dir == SplitDir.v ? size : (keep.width ?? d.width);
+      final h = root.dir == SplitDir.h ? size : (keep.height ?? d.height);
+      return EditResult(
+        d.copyWith(root: keep.child, width: w, height: h, bottom: keep.bottom),
+        fills(keep.child).isEmpty ? null : fills(keep.child).first.id,
+      );
+    }
+    final sizes = [...root.sizes]..removeAt(idx);
+    final children = [...root.children]..removeAt(idx);
+    final removed = root.sizes[idx];
+    return EditResult(
+      d.copyWith(
+        root: root.copyWith(sizes: sizes, children: children),
+        width: root.dir == SplitDir.v ? d.width - removed : d.width,
+        height: root.dir == SplitDir.h ? d.height - removed : d.height,
+      ),
+      null,
+    );
+  }
+
+  static EditResult setFrameSize(WindowDesign d, String frameId, {double? widthMm, double? heightMm}) {
+    final root = d.root;
+    if (root is! CoupleNode) return EditResult(d, frameId);
+    final idx = root.children.indexWhere((f) => f.id == frameId);
+    if (idx < 0) return EditResult(d, frameId);
+    final frame = root.children[idx];
+    final sizes = [...root.sizes];
+    var width = d.width;
+    var height = d.height;
+    var children = [...root.children];
+
+    if (root.dir == SplitDir.v) {
+      if (widthMm != null) {
+        final delta = widthMm - sizes[idx];
+        sizes[idx] = widthMm;
+        width = d.width + delta;
+      }
+      if (heightMm != null) {
+        children[idx] = frame.copyWith(height: heightMm);
+        height = [
+          for (var i = 0; i < children.length; i++)
+            children[i].height ?? height,
+        ].fold<double>(0, (a, b) => a > b ? a : b);
+      }
+    } else {
+      if (heightMm != null) {
+        final delta = heightMm - sizes[idx];
+        sizes[idx] = heightMm;
+        height = d.height + delta;
+      }
+      if (widthMm != null) {
+        children[idx] = frame.copyWith(width: widthMm);
+        width = [
+          for (var i = 0; i < children.length; i++)
+            children[i].width ?? width,
+        ].fold<double>(0, (a, b) => a > b ? a : b);
+      }
+    }
+    return EditResult(
+      d.copyWith(root: root.copyWith(sizes: sizes, children: children), width: width, height: height),
+      frameId,
+    );
+  }
+
+  static EditResult setFrameBottom(WindowDesign d, String frameId, BottomKind bottom) {
+    final frame = find(d.root, frameId);
+    if (frame is! FrameNode) {
+      // tek kasa: design.bottom
+      if (d.root is! CoupleNode) return setBottom(d, bottom);
+      return EditResult(d, frameId);
+    }
+    return EditResult(d.copyWith(root: replace(d.root, frameId, frame.copyWith(bottom: bottom))), frameId);
+  }
 }

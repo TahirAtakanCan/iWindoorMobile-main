@@ -379,6 +379,7 @@ class _DesignEditorScreenState extends State<DesignEditorScreen> {
                 design: c.design,
                 layout: c.layout,
                 lookOf: c.lookOf,
+                color: c.profileColor(),
                 selectedId: c.selectedId,
                 issueIds: {for (final i in c.issues) ...i.nodeIds},
                 showLabels: _showLabels,

@@ -262,4 +262,40 @@ List<DesignTemplate> builtInTemplates() => [
           ),
         ),
       ),
+      DesignTemplate(
+        id: 'builtin-13',
+        name: 'Balkon kapısı + pencere (birleşik)',
+        category: 'DOOR',
+        defaultWidth: 2100,
+        defaultHeight: 2200,
+        build: (w, h, s) => WindowDesign(
+          width: w,
+          height: h,
+          seriesId: s,
+          root: CoupleNode(
+            id: 'n1',
+            dir: SplitDir.v,
+            sizes: const [900, 1200],
+            children: [
+              FrameNode(
+                id: 'n2',
+                bottom: BottomKind.threshold,
+                child: SashNode(
+                  id: 'n3',
+                  opening: OpeningType.tiltTurnLeft,
+                  child: SplitNode(id: 'n4', dir: SplitDir.h, sizes: const [3, 1], children: [
+                    _g('n5'),
+                    _g('n6', fill: FillType.panel),
+                  ]),
+                ),
+              ),
+              FrameNode(
+                id: 'n7',
+                height: 1400,
+                child: SashNode(id: 'n8', opening: OpeningType.tiltTurnRight, child: _g('n9')),
+              ),
+            ],
+          ),
+        ),
+      ),
     ];

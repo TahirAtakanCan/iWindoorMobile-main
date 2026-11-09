@@ -6,6 +6,7 @@ class CatalogSnapshot {
   final List<GlassInfo> glasses;
   final List<ProfileInfo> profiles;
   final List<Accessory> accessories;
+  final List<CatalogColor> colors;
   final DateTime? generatedAt;
   final bool fromCache;
 
@@ -14,6 +15,7 @@ class CatalogSnapshot {
     required this.glasses,
     required this.profiles,
     this.accessories = const [],
+    this.colors = const [],
     this.generatedAt,
     this.fromCache = false,
   });
@@ -34,9 +36,19 @@ class CatalogSnapshot {
         accessories: [
           for (final a in (j['accessories'] as List? ?? const [])) Accessory.fromJson(Map<String, dynamic>.from(a as Map))
         ],
+        colors: [
+          for (final c in (j['colors'] as List? ?? const [])) CatalogColor.fromJson(Map<String, dynamic>.from(c as Map))
+        ],
         generatedAt: DateTime.tryParse('${j['generatedAt']}'),
         fromCache: fromCache,
       );
+
+  CatalogColor? colorByCode(String code) {
+    for (final c in colors) {
+      if (c.code == code) return c;
+    }
+    return null;
+  }
 
   SeriesInfo seriesFor(Object? id) {
     final key = id?.toString();
@@ -261,6 +273,47 @@ class HardwareRule {
         if (accessoryName != null) 'accessoryName': accessoryName,
         'qtyType': qtyType,
         'qty': qty,
+      };
+}
+
+/// Katalog rengi / kaplama.
+class CatalogColor {
+  final int id;
+  final String code;
+  final String name;
+  final String hexOutside;
+  final String hexInside;
+  final double surchargePct;
+  final bool isActive;
+
+  const CatalogColor({
+    required this.id,
+    required this.code,
+    required this.name,
+    required this.hexOutside,
+    required this.hexInside,
+    this.surchargePct = 0,
+    this.isActive = true,
+  });
+
+  factory CatalogColor.fromJson(Map<String, dynamic> j) => CatalogColor(
+        id: (j['id'] as num).toInt(),
+        code: j['code'] as String? ?? '',
+        name: j['name'] as String? ?? '',
+        hexOutside: j['hexOutside'] as String? ?? '#FFFFFF',
+        hexInside: j['hexInside'] as String? ?? (j['hexOutside'] as String? ?? '#FFFFFF'),
+        surchargePct: (j['surchargePct'] as num?)?.toDouble() ?? 0,
+        isActive: j['isActive'] as bool? ?? j['active'] as bool? ?? true,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'code': code,
+        'name': name,
+        'hexOutside': hexOutside,
+        'hexInside': hexInside,
+        'surchargePct': surchargePct,
+        'isActive': isActive,
       };
 }
 

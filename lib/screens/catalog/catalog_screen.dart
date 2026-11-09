@@ -19,7 +19,7 @@ class CatalogScreen extends StatefulWidget {
 
 class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProviderStateMixin {
   late final CatalogAdminApi _api = widget.api ?? CatalogAdminApi();
-  late final TabController _tabs = TabController(length: 4, vsync: this);
+  late final TabController _tabs = TabController(length: 5, vsync: this);
 
   CatalogSnapshot? _snap;
   List<HardwareRule> _rules = [];
@@ -181,6 +181,7 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
             Tab(text: 'Camlar'),
             Tab(text: 'Aksesuarlar'),
             Tab(text: 'Donanım'),
+            Tab(text: 'Renkler'),
           ],
         ),
         actions: [
@@ -213,7 +214,7 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
               : Column(children: [
                   AnimatedBuilder(
                     animation: _tabs,
-                    builder: (_, __) => _tabs.index == 3 ? const SizedBox.shrink() : _filterBar(),
+                    builder: (_, __) => (_tabs.index == 3 || _tabs.index == 4) ? const SizedBox.shrink() : _filterBar(),
                   ),
                   Expanded(
                     child: TabBarView(controller: _tabs, children: [
@@ -221,6 +222,7 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
                       _glassesTab(),
                       _accessoriesTab(),
                       _hardwareTab(),
+                      _colorsTab(),
                     ]),
                   ),
                 ]),
@@ -252,6 +254,13 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
             onPressed: () => _editRule(null),
             icon: const Icon(Icons.add),
             label: const Text('Kural ekle'),
+          );
+        }
+        if (_tabs.index == 4) {
+          return FloatingActionButton.extended(
+            onPressed: () => _editColor(null),
+            icon: const Icon(Icons.add),
+            label: const Text('Yeni renk'),
           );
         }
         return const SizedBox.shrink();
@@ -997,4 +1006,139 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
   }
 
   TextStyle? _dim(bool active) => active ? null : TextStyle(color: Colors.grey.shade600);
+
+  // ---------- RENKLER ----------
+
+  Color _hexColor(String hex) {
+    var h = hex.trim();
+    if (h.startsWith('#')) h = h.substring(1);
+    if (h.length == 6) h = 'FF$h';
+    final v = int.tryParse(h, radix: 16);
+    return v == null ? Colors.grey : Color(v);
+  }
+
+  Widget _colorsTab() {
+    final colors = (_snap?.colors ?? const <CatalogColor>[])
+        .where((c) => _showInactive || c.isActive)
+        .where((c) => _match(_query, [c.code, c.name]))
+        .toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+    if (colors.isEmpty) {
+      return const Center(child: Text('Renk yok.'));
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.all(12),
+      itemCount: colors.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (_, i) {
+        final col = colors[i];
+        return Card(
+          child: ListTile(
+            leading: Row(mainAxisSize: MainAxisSize.min, children: [
+              Container(width: 28, height: 28, decoration: BoxDecoration(color: _hexColor(col.hexOutside), border: Border.all())),
+              const SizedBox(width: 4),
+              Container(width: 28, height: 28, decoration: BoxDecoration(color: _hexColor(col.hexInside), border: Border.all())),
+            ]),
+            title: Text(col.name, overflow: TextOverflow.ellipsis),
+            subtitle: Text('${col.code} · %${col.surchargePct.toStringAsFixed(col.surchargePct == col.surchargePct.roundToDouble() ? 0 : 1)}'
+                '${col.isActive ? '' : ' · Pasif'}'),
+            trailing: _isAdmin
+                ? IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => _editColor(col))
+                : null,
+            onTap: _isAdmin ? () => _editColor(col) : null,
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _editColor(CatalogColor? existing) async {
+    final codeCtrl = TextEditingController(text: existing?.code ?? '');
+    final nameCtrl = TextEditingController(text: existing?.name ?? '');
+    final outCtrl = TextEditingController(text: existing?.hexOutside ?? '#454C52');
+    final inCtrl = TextEditingController(text: existing?.hexInside ?? '#454C52');
+    final pctCtrl = TextEditingController(text: (existing?.surchargePct ?? 0).toString());
+    var active = existing?.isActive ?? true;
+
+    final save = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: Text(existing == null ? 'Renk ekle' : 'Rengi düzenle'),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(controller: codeCtrl, decoration: const InputDecoration(labelText: 'Kod', border: OutlineInputBorder())),
+              const SizedBox(height: 10),
+              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Ad', border: OutlineInputBorder())),
+              const SizedBox(height: 10),
+              TextField(
+                controller: outCtrl,
+                decoration: const InputDecoration(labelText: 'Dış hex', border: OutlineInputBorder()),
+                onChanged: (_) => setLocal(() {}),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: inCtrl,
+                decoration: const InputDecoration(labelText: 'İç hex', border: OutlineInputBorder()),
+                onChanged: (_) => setLocal(() {}),
+              ),
+              const SizedBox(height: 10),
+              Row(children: [
+                Container(width: 40, height: 40, color: _hexColor(outCtrl.text), margin: const EdgeInsets.only(right: 8)),
+                Container(width: 40, height: 40, color: _hexColor(inCtrl.text)),
+                const SizedBox(width: 12),
+                const Text('Önizleme'),
+              ]),
+              const SizedBox(height: 10),
+              TextField(
+                controller: pctCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                decoration: const InputDecoration(labelText: 'Fiyat farkı %', border: OutlineInputBorder()),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Aktif'),
+                value: active,
+                onChanged: (v) => setLocal(() => active = v),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Kaydet')),
+          ],
+        ),
+      ),
+    );
+    if (save != true || !mounted) return;
+    final pct = double.tryParse(pctCtrl.text.replaceAll(',', '.')) ?? 0;
+    if (existing == null) {
+      final ok = await _runWrite(() => _api.createColor(
+            code: codeCtrl.text.trim(),
+            name: nameCtrl.text.trim(),
+            hexOutside: outCtrl.text.trim(),
+            hexInside: inCtrl.text.trim(),
+            surchargePct: pct,
+            isActive: active,
+          ));
+      if (ok != null) {
+        _snack('Renk eklendi.');
+        await _reload();
+      }
+    } else {
+      final ok = await _runWrite(() => _api.updateColor(
+            existing.id,
+            code: codeCtrl.text.trim(),
+            name: nameCtrl.text.trim(),
+            hexOutside: outCtrl.text.trim(),
+            hexInside: inCtrl.text.trim(),
+            surchargePct: pct,
+            isActive: active,
+          ));
+      if (ok != null) {
+        _snack('Renk güncellendi.');
+        await _reload();
+      }
+    }
+  }
 }

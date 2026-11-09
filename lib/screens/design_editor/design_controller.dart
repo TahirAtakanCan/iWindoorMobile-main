@@ -244,6 +244,48 @@ class DesignController extends ChangeNotifier {
     _commit(r.design, select: selectedId);
   }
 
+  List<FrameNode> get frames {
+    final root = _design.root;
+    if (root is CoupleNode) return root.children;
+    return const [];
+  }
+
+  bool get isCoupled => _design.root is CoupleNode;
+
+  void addFrame(String side, double sizeMm, {double? height, BottomKind bottom = BottomKind.frame}) {
+    final r = DesignOps.addFrame(
+      _design,
+      side,
+      sizeMm,
+      height: height,
+      bottom: bottom,
+      glassCode: catalog.defaultGlassCode,
+    );
+    if (r.error != null) return;
+    _commit(r.design, select: r.selectedId);
+  }
+
+  void removeFrame(String frameId) {
+    final r = DesignOps.removeFrame(_design, frameId);
+    _commit(r.design, select: r.selectedId);
+  }
+
+  void setFrameSize(String frameId, {double? widthMm, double? heightMm}) {
+    final r = DesignOps.setFrameSize(_design, frameId, widthMm: widthMm, heightMm: heightMm);
+    _commit(r.design, select: selectedId);
+  }
+
+  void setFrameBottom(String frameId, BottomKind bottom) {
+    final r = DesignOps.setFrameBottom(_design, frameId, bottom);
+    _commit(r.design, select: selectedId);
+  }
+
+  ProfileColor profileColor() {
+    final cat = catalog.colorByCode(_design.colorCode);
+    if (cat != null) return ProfileColor.fromHex(cat.code, cat.name, cat.hexOutside);
+    return ProfileColor.of(_design.colorCode);
+  }
+
   void setGlass(String code) {
     final id = selectedId;
     if (id == null) return;

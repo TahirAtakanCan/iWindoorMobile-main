@@ -160,6 +160,16 @@ class DesignPainter extends CustomPainter {
     c.drawPath(path, Paint()..color = color.fill);
     final shade = (p.layer == DrawLayer.bead ? _beadShade : _sashShade)[p.side]!;
     if (shade > 0) c.drawPath(path, Paint()..color = Colors.black.withValues(alpha: shade));
+    if (color.woodGrain && p.layer != DrawLayer.bead) {
+      c.save();
+      c.clipPath(path);
+      final bounds = path.getBounds();
+      final grain = _stroke(Colors.black.withValues(alpha: .12), hair);
+      for (var x = bounds.left; x < bounds.right; x += 7) {
+        c.drawLine(Offset(x, bounds.top), Offset(x + bounds.height * .08, bounds.bottom), grain);
+      }
+      c.restore();
+    }
     c.drawPath(path, _stroke(color.stroke, hair)..strokeJoin = StrokeJoin.round); // gönye çizgisi buradan gelir
   }
 
@@ -183,6 +193,15 @@ class DesignPainter extends CustomPainter {
             ? Rect.fromLTRB(r.left + r.width * .62, r.top, r.right, r.bottom)
             : Rect.fromLTRB(r.left, r.top + r.height * .62, r.right, r.bottom);
         c.drawRect(shadow, Paint()..color = Colors.black.withValues(alpha: .08));
+      }
+      if (color.woodGrain) {
+        c.save();
+        c.clipRect(r);
+        final grain = _stroke(Colors.black.withValues(alpha: .12), hair);
+        for (var x = r.left; x < r.right; x += 7) {
+          c.drawLine(Offset(x, r.top), Offset(x + r.height * .08, r.bottom), grain);
+        }
+        c.restore();
       }
     }
     c.drawRect(r, _stroke(color.stroke, hair));
@@ -296,17 +315,29 @@ class DesignPainter extends CustomPainter {
     c.drawRect(r, _stroke(const Color(0xFF5F8AA6), .8 * hair));
   }
 
-  // --- ölçüler: zincir (kayıt eksenleri) + toplam ---
+  // --- ölçüler: zincir (kayıt eksenleri / kasa sınırları) + toplam ---
   void _dims(Canvas c, double k) {
     final fs = math.max(designW, designH) / 30;
     List<double> uniq(List<double> v) => (v.map((e) => (e * 10).round() / 10).toSet().toList()..sort());
-    final xs = [0.0, ...uniq(layout.mullionX), designW];
+    final frameXs = <double>{0.0, designW};
+    final multiHeight = layout.frames.length > 1;
+    for (final f in layout.frames) {
+      frameXs.add(f.box.l);
+      frameXs.add(f.box.r);
+    }
+    final xs = [...uniq([...layout.mullionX, ...frameXs])];
     final ys = [0.0, ...uniq(layout.mullionY), designH];
     final hasX = xs.length > 2, hasY = ys.length > 2;
     if (hasX) _chain(c, xs, true, designH + 80, fs, k);
     _chain(c, [0, designW], true, designH + 80 + (hasX ? fs * 2.4 : 0), fs, k);
     if (hasY) _chain(c, ys, false, -80, fs, k);
     _chain(c, [0, designH], false, -80 - (hasY ? fs * 2.4 : 0), fs, k);
+    if (multiHeight) {
+      for (final f in layout.frames) {
+        if ((f.box.h - designH).abs() < 0.5) continue;
+        _chain(c, [f.box.t, f.box.b], false, f.box.r + 60, fs * .85, k);
+      }
+    }
   }
 
   void _chain(Canvas c, List<double> v, bool horiz, double off, double fs, double k) {

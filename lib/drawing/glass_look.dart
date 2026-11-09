@@ -4,15 +4,35 @@ import 'package:flutter/material.dart';
 class ProfileColor {
   final String code, label;
   final Color fill, stroke, hardware;
-  const ProfileColor(this.code, this.label, this.fill, this.stroke, this.hardware);
+  final bool woodGrain;
+  const ProfileColor(this.code, this.label, this.fill, this.stroke, this.hardware, {this.woodGrain = false});
 
   static const white = ProfileColor('white', 'Beyaz', Color(0xFFF7F8F8), Color(0xFF6D757B), Color(0xFFD9DDE0));
   static const anthracite = ProfileColor('anthracite', 'Antrasit', Color(0xFF454C52), Color(0xFF1C2125), Color(0xFF9AA2A8));
-  static const oak = ProfileColor('oak', 'Altın meşe', Color(0xFFB9853F), Color(0xFF5A3A1C), Color(0xFFC9A24A));
+  static const oak = ProfileColor('oak', 'Altın meşe', Color(0xFFB9853F), Color(0xFF5A3A1C), Color(0xFFC9A24A), woodGrain: true);
 
   static const all = [white, anthracite, oak];
 
   static ProfileColor of(String code) => all.firstWhere((c) => c.code == code, orElse: () => white);
+
+  /// Katalog hexOutside'dan üret; OAK/WAL kodlarında damar deseni.
+  factory ProfileColor.fromHex(String code, String label, String hexOutside) {
+    final fill = _parseHex(hexOutside) ?? white.fill;
+    final stroke = Color.lerp(fill, Colors.black, 0.45) ?? fill;
+    final hardware = Color.lerp(fill, Colors.white, 0.35) ?? fill;
+    final upper = code.toUpperCase();
+    final wood = upper.contains('OAK') || upper.contains('WAL') || upper.startsWith('WOOD');
+    return ProfileColor(code, label, fill, stroke, hardware, woodGrain: wood);
+  }
+
+  static Color? _parseHex(String hex) {
+    var h = hex.trim();
+    if (h.startsWith('#')) h = h.substring(1);
+    if (h.length == 6) h = 'FF$h';
+    if (h.length != 8) return null;
+    final v = int.tryParse(h, radix: 16);
+    return v == null ? null : Color(v);
+  }
 }
 
 /// Cam görünümü. Katalogdaki Glass.visualStyle değerinden seçilir.

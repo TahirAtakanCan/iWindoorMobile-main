@@ -214,6 +214,58 @@ class CatalogAdminApi {
         await _dio.delete('/catalog/hardware-rules/$id');
       }, invalidate: true);
 
+  // --- Renkler ---
+
+  Future<List<CatalogColor>> listColors({bool includeInactive = true}) => _call(() async {
+        final r = await _dio.get('/catalog/colors', queryParameters: {
+          if (!includeInactive) 'activeOnly': true,
+        });
+        final raw = r.data;
+        final list = raw is List ? raw : (raw is Map ? (raw['items'] as List? ?? raw['colors'] as List? ?? const []) : const []);
+        return [for (final c in list) CatalogColor.fromJson(Map<String, dynamic>.from(c as Map))];
+      });
+
+  Future<CatalogColor> createColor({
+    required String code,
+    required String name,
+    required String hexOutside,
+    required String hexInside,
+    double surchargePct = 0,
+    bool isActive = true,
+  }) =>
+      _call(() async {
+        final r = await _dio.post('/catalog/colors', data: {
+          'code': code,
+          'name': name,
+          'hexOutside': hexOutside,
+          'hexInside': hexInside,
+          'surchargePct': surchargePct,
+          'isActive': isActive,
+        });
+        return CatalogColor.fromJson(Map<String, dynamic>.from(r.data as Map));
+      }, invalidate: true);
+
+  Future<CatalogColor> updateColor(
+    int id, {
+    required String code,
+    required String name,
+    required String hexOutside,
+    required String hexInside,
+    double surchargePct = 0,
+    bool isActive = true,
+  }) =>
+      _call(() async {
+        final r = await _dio.put('/catalog/colors/$id', data: {
+          'code': code,
+          'name': name,
+          'hexOutside': hexOutside,
+          'hexInside': hexInside,
+          'surchargePct': surchargePct,
+          'isActive': isActive,
+        });
+        return CatalogColor.fromJson(Map<String, dynamic>.from(r.data as Map));
+      }, invalidate: true);
+
   // --- Toplu zam ---
 
   Future<PriceAdjustmentResult> adjustPrices({

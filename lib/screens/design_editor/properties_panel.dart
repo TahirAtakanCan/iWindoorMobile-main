@@ -52,30 +52,25 @@ class PropertiesPanel extends StatelessWidget {
                 Expanded(flex: 2, child: _SeriesDropdown(c: c)),
               ]),
               const SizedBox(height: 10),
-              Wrap(spacing: 8, runSpacing: 8, children: [
-                for (final col in ProfileColor.all)
-                  ChoiceChip(
-                    avatar: CircleAvatar(backgroundColor: col.fill, radius: 8),
-                    label: Text(col.label),
-                    selected: c.design.colorCode == col.code,
-                    onSelected: (_) => c.setColor(col.code),
-                  ),
-              ]),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<BottomKind>(
-                key: ValueKey(c.design.bottom),
-                initialValue: c.design.bottom,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Alt profil', border: OutlineInputBorder(), isDense: true),
-                items: const [
-                  DropdownMenuItem(value: BottomKind.frame, child: Text('Kasa')),
-                  DropdownMenuItem(value: BottomKind.threshold, child: Text('Eşik')),
-                ],
-                onChanged: (v) {
-                  if (v != null) c.setBottom(v);
-                },
-              ),
+              _ColorPicker(c: c),
+              if (!c.isCoupled) ...[
+                const SizedBox(height: 10),
+                DropdownButtonFormField<BottomKind>(
+                  key: ValueKey(c.design.bottom),
+                  initialValue: c.design.bottom,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Alt profil', border: OutlineInputBorder(), isDense: true),
+                  items: const [
+                    DropdownMenuItem(value: BottomKind.frame, child: Text('Kasa')),
+                    DropdownMenuItem(value: BottomKind.threshold, child: Text('Eşik')),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) c.setBottom(v);
+                  },
+                ),
+              ],
             ]),
+            _FramesSection(c: c),
             if (c.selectedSash != null) _SashProps(c: c),
             if (c.selectedSplitIsAdapterCandidate) _JointProps(c: c),
             if (fill == null)
@@ -123,6 +118,176 @@ class PropertiesPanel extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _ColorPicker extends StatelessWidget {
+  final DesignController c;
+  const _ColorPicker({required this.c});
+
+  @override
+  Widget build(BuildContext context) {
+    final catalogColors = c.catalog.colors.where((x) => x.isActive).toList();
+    final items = <(String code, String label, Color fill)>[
+      if (catalogColors.isEmpty)
+        for (final p in ProfileColor.all) (p.code, p.label, p.fill)
+      else
+        for (final col in catalogColors)
+          (col.code, '${col.name} · %${col.surchargePct == col.surchargePct.roundToDouble() ? col.surchargePct.toStringAsFixed(0) : col.surchargePct.toStringAsFixed(1)}', ProfileColor.fromHex(col.code, col.name, col.hexOutside).fill),
+    ];
+    return Wrap(spacing: 8, runSpacing: 8, children: [
+      for (final (code, label, fill) in items)
+        ChoiceChip(
+          avatar: CircleAvatar(backgroundColor: fill, radius: 8),
+          label: Text(label, overflow: TextOverflow.ellipsis),
+          selected: c.design.colorCode == code,
+          onSelected: (_) => c.setColor(code),
+        ),
+    ]);
+  }
+}
+
+class _FramesSection extends StatelessWidget {
+  final DesignController c;
+  const _FramesSection({required this.c});
+
+  @override
+  Widget build(BuildContext context) {
+    final couple = c.design.root is CoupleNode ? c.design.root as CoupleNode : null;
+    return _Section(title: 'Kasalar', children: [
+      if (couple == null)
+        Text(
+          'Tek kasa: ${c.design.width.round()} × ${c.design.height.round()} · '
+          '${c.design.bottom == BottomKind.threshold ? 'Eşik' : 'Kasa'}',
+          style: Theme.of(context).textTheme.bodyMedium,
+        )
+      else
+        for (var i = 0; i < couple.children.length; i++)
+          _FrameTile(c: c, index: i, frame: couple.children[i], sizeMm: couple.sizes[i], dir: couple.dir),
+      const SizedBox(height: 8),
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        OutlinedButton(onPressed: () => _promptAdd(context, DesignOps.sideLeft), child: const Text('Sola kasa ekle')),
+        OutlinedButton(onPressed: () => _promptAdd(context, DesignOps.sideRight), child: const Text('Sağa kasa ekle')),
+        OutlinedButton(onPressed: () => _promptAdd(context, DesignOps.sideTop), child: const Text('Üste kasa ekle')),
+      ]),
+    ]);
+  }
+
+  Future<void> _promptAdd(BuildContext context, String side) async {
+    final sizeCtrl = TextEditingController(text: '900');
+    final heightCtrl = TextEditingController(text: c.design.height.round().toString());
+    var bottom = BottomKind.frame;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Kasa ekle'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(
+              controller: sizeCtrl,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: side == DesignOps.sideTop || side == DesignOps.sideBottom ? 'Yükseklik (mm)' : 'Genişlik (mm)',
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            if (side == DesignOps.sideLeft || side == DesignOps.sideRight) ...[
+              const SizedBox(height: 10),
+              TextField(
+                controller: heightCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Kasa yüksekliği (mm, boş=tam)', border: OutlineInputBorder()),
+              ),
+            ],
+            const SizedBox(height: 10),
+            DropdownButtonFormField<BottomKind>(
+              initialValue: bottom,
+              decoration: const InputDecoration(labelText: 'Alt', border: OutlineInputBorder()),
+              items: const [
+                DropdownMenuItem(value: BottomKind.frame, child: Text('Kasa')),
+                DropdownMenuItem(value: BottomKind.threshold, child: Text('Eşik')),
+              ],
+              onChanged: (v) => setLocal(() => bottom = v ?? bottom),
+            ),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Ekle')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+    final size = double.tryParse(sizeCtrl.text.replaceAll(',', '.'));
+    if (size == null || size < 300) return;
+    final h = double.tryParse(heightCtrl.text.replaceAll(',', '.'));
+    c.addFrame(side, size, height: h, bottom: bottom);
+  }
+}
+
+class _FrameTile extends StatelessWidget {
+  final DesignController c;
+  final int index;
+  final FrameNode frame;
+  final double sizeMm;
+  final SplitDir dir;
+  const _FrameTile({required this.c, required this.index, required this.frame, required this.sizeMm, required this.dir});
+
+  @override
+  Widget build(BuildContext context) {
+    final w = dir == SplitDir.v ? sizeMm : (frame.width ?? c.design.width);
+    final h = dir == SplitDir.h ? sizeMm : (frame.height ?? c.design.height);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text('Kasa ${index + 1}: ${w.round()} × ${h.round()} · ${frame.bottom == BottomKind.threshold ? 'Eşik' : 'Kasa'}',
+              style: const TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(
+              child: _NumField(
+                label: 'Genişlik',
+                value: w,
+                onSubmitted: (v) => c.setFrameSize(frame.id, widthMm: v),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _NumField(
+                label: 'Yükseklik',
+                value: h,
+                onSubmitted: (v) => c.setFrameSize(frame.id, heightMm: v),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(
+              child: DropdownButtonFormField<BottomKind>(
+                key: ValueKey('${frame.id}-${frame.bottom}'),
+                initialValue: frame.bottom,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Alt', border: OutlineInputBorder(), isDense: true),
+                items: const [
+                  DropdownMenuItem(value: BottomKind.frame, child: Text('Kasa')),
+                  DropdownMenuItem(value: BottomKind.threshold, child: Text('Eşik')),
+                ],
+                onChanged: (v) {
+                  if (v != null) c.setFrameBottom(frame.id, v);
+                },
+              ),
+            ),
+            IconButton(
+              tooltip: 'Sil',
+              onPressed: () => c.removeFrame(frame.id),
+              icon: const Icon(Icons.delete_outline),
+            ),
+          ]),
+        ]),
+      ),
     );
   }
 }

@@ -36,6 +36,21 @@ SeriesInfo seriesForWindow(CatalogSnapshot catalog, QuoteWindow w) {
   return catalog.seriesFor(w.design.seriesId);
 }
 
+String? _colorTitle(CatalogSnapshot catalog, String colorCode) {
+  final code = colorCode.trim();
+  if (code.isEmpty || code.toLowerCase() == 'white') return null;
+  final cat = catalog.colorByCode(code);
+  if (cat != null) return cat.name;
+  final builtin = ProfileColor.of(code);
+  return builtin.code == 'white' && code.toLowerCase() != 'white' ? code : builtin.label;
+}
+
+ProfileColor _profileColor(CatalogSnapshot catalog, String colorCode) {
+  final cat = catalog.colorByCode(colorCode);
+  if (cat != null) return ProfileColor.fromHex(cat.code, cat.name, cat.hexOutside);
+  return ProfileColor.of(colorCode);
+}
+
 class PdfService {
   Future<Uint8List> buildQuotePdf(
     ProjectQuote q,
@@ -55,10 +70,17 @@ class PdfService {
     LayoutResult layoutOf(QuoteWindow w) => LayoutEngine(seriesForWindow(catalog, w).geometry).run(w.design);
 
     final widgets = <pw.Widget>[
-      ..._cover(q, lookOf, layoutOf, currency),
+      ..._cover(q, lookOf, layoutOf, currency, catalog),
       for (final w in q.windows) ...[
         pw.NewPage(),
-        ..._windowPage(w, lookOf, layoutOf(w), seriesForWindow(catalog, w).geometry, currency),
+        ..._windowPage(
+          w,
+          lookOf,
+          layoutOf(w),
+          seriesForWindow(catalog, w).geometry,
+          currency,
+          catalog: catalog,
+        ),
       ],
       pw.NewPage(),
       ..._materialsPage(q, currency),
@@ -105,6 +127,7 @@ class PdfService {
     GlassLook Function(String) lookOf,
     LayoutResult Function(QuoteWindow) layoutOf,
     String currency,
+    CatalogSnapshot catalog,
   ) {
     final p = q.project;
     return [
@@ -139,7 +162,7 @@ class PdfService {
       pw.SizedBox(height: 16),
       pw.Text('Pencereler', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
       pw.SizedBox(height: 6),
-      _windowsSummaryTable(q, lookOf, layoutOf, currency),
+      _windowsSummaryTable(q, lookOf, layoutOf, currency, catalog),
       pw.SizedBox(height: 16),
       _totalsBlock(q, currency),
       if ((q.company.quoteNote ?? '').trim().isNotEmpty) ...[
@@ -177,17 +200,23 @@ class PdfService {
     GlassLook Function(String) lookOf,
     LayoutResult layout,
     SeriesGeometry geometry,
-    String currency,
-  ) {
+    String currency, {
+    required CatalogSnapshot catalog,
+  }) {
     final bom = BomLine.aggregate(layout.bom);
     final ruleIssues = checkDesign(layout, geometry, w.design);
+    final seriesLabel = w.seriesName?.trim().isNotEmpty == true
+        ? w.seriesName!.trim()
+        : seriesForWindow(catalog, w).name;
+    final colorLabel = _colorTitle(catalog, w.design.colorCode);
+    final profileColor = _profileColor(catalog, w.design.colorCode);
     return [
       pw.Text(w.name, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
       pw.SizedBox(height: 4),
       pw.Text(
-        '${w.width.toStringAsFixed(0)} × ${w.height.toStringAsFixed(0)} mm'
-        '${w.seriesName != null ? '  ·  ${w.seriesName}' : ''}'
-        '  ·  ${w.quantity} adet',
+        '$seriesLabel'
+        '${colorLabel != null ? ' · $colorLabel' : ''}'
+        ' · ${w.quantity} adet',
         style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
       ),
       pw.SizedBox(height: 10),
@@ -196,7 +225,7 @@ class PdfService {
           design: w.design,
           layout: layout,
           lookOf: lookOf,
-          color: ProfileColor.of(w.design.colorCode),
+          color: profileColor,
           showDimensions: true,
           width: 480,
           height: 300,
@@ -397,6 +426,7 @@ class PdfService {
     GlassLook Function(String) lookOf,
     LayoutResult Function(QuoteWindow) layoutOf,
     String currency,
+    CatalogSnapshot catalog,
   ) {
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.4),
@@ -428,7 +458,7 @@ class PdfService {
                   design: w.design,
                   layout: layoutOf(w),
                   lookOf: lookOf,
-                  color: ProfileColor.of(w.design.colorCode),
+                  color: _profileColor(catalog, w.design.colorCode),
                   showDimensions: false,
                   width: 60,
                   height: 60,

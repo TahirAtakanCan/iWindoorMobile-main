@@ -26,7 +26,7 @@ class Box {
 
 // ---------- primitifler ----------
 /// Çizim sırası (alttan üste) bu enum sırasıdır.
-enum DrawLayer { glass, duplex, bead, mullion, frame, sash, adapter, hardware, symbol, label, dims }
+enum DrawLayer { glass, duplex, bead, mullion, frame, coupling, sash, adapter, hardware, symbol, label, dims }
 
 enum ProfileSide { top, right, bottom, left }
 
@@ -86,10 +86,10 @@ class HitArea {
 }
 
 // ---------- kesim listesi (backend BomPricer biçimi) ----------
-enum BomGroup { profile, bead, duplex, glass, panel, hardware }
+enum BomGroup { profile, bead, duplex, glass, panel, hardware, color }
 
 /// Profil satırının rolü: sunucu bunu serideki ilgili profile eşler.
-enum ProfileRole { frame, sash, mullion, slideSash, adapter, doorSash, threshold }
+enum ProfileRole { frame, sash, mullion, slideSash, adapter, doorSash, threshold, coupling }
 
 class BomLine {
   final BomGroup group;
@@ -100,18 +100,21 @@ class BomLine {
   final String? cut; // "45/45" , "90/90" , "45/90"
   final String? glassCode; // cam/panel kodu; çıtada camın kodu (kalınlığa göre çıta seçimi için)
   final String? kind; // donanım: TURN | TILT | TILT_TURN | SLIDE | PASSIVE | DOOR | DOOR_PASSIVE
+  final String? colorCode;
   final int qty;
 
   const BomLine.bar(this.group, this.label, this.length, this.cut, this.qty, {this.role, this.glassCode})
       : w = null,
         h = null,
-        kind = null;
+        kind = null,
+        colorCode = null;
 
   const BomLine.sheet(this.group, this.label, this.w, this.h, this.qty, {required this.glassCode})
       : length = null,
         cut = null,
         role = null,
-        kind = null;
+        kind = null,
+        colorCode = null;
 
   const BomLine.hardware(this.kind, this.w, this.h, this.qty)
       : group = BomGroup.hardware,
@@ -119,10 +122,24 @@ class BomLine {
         length = null,
         cut = null,
         role = null,
-        glassCode = null;
+        glassCode = null,
+        colorCode = null;
+
+  const BomLine.color(this.colorCode)
+      : group = BomGroup.color,
+        label = 'Renk farkı',
+        length = null,
+        w = null,
+        h = null,
+        cut = null,
+        role = null,
+        kind = null,
+        glassCode = null,
+        qty = 1;
 
   bool get isBar => length != null;
   bool get isHardware => group == BomGroup.hardware;
+  bool get isColor => group == BomGroup.color;
 
   static String _roleName(ProfileRole r) => switch (r) {
         ProfileRole.frame => 'FRAME',
@@ -132,14 +149,17 @@ class BomLine {
         ProfileRole.adapter => 'ADAPTER',
         ProfileRole.doorSash => 'DOOR_SASH',
         ProfileRole.threshold => 'THRESHOLD',
+        ProfileRole.coupling => 'COUPLING',
       };
 
   /// Backend'in beklediği satır: {"group":"PROFILE","role":"FRAME","length":1806,"qty":2,"cut":"45/45"}
   /// Donanım: {"group":"HARDWARE","kind":"TILT_TURN","w":536,"h":1214,"qty":1}
+  /// Renk: {"group":"COLOR","colorCode":"ANT-1","qty":1}
   Map<String, dynamic> toJson() => {
         'group': group.name.toUpperCase(),
         if (role != null) 'role': _roleName(role!),
         if (kind != null) 'kind': kind,
+        if (colorCode != null) 'colorCode': colorCode,
         if (length != null) 'length': _r1(length!),
         if (w != null) 'w': _r1(w!),
         if (h != null) 'h': _r1(h!),
@@ -148,10 +168,11 @@ class BomLine {
         'qty': qty,
       };
 
-  String get _key => '${group.name}|${role?.name}|$kind|$label|${length?.toStringAsFixed(1)}|'
+  String get _key => '${group.name}|${role?.name}|$kind|$colorCode|$label|${length?.toStringAsFixed(1)}|'
       '${w?.toStringAsFixed(1)}|${h?.toStringAsFixed(1)}|$cut|$glassCode';
 
   BomLine _withQty(int q) {
+    if (isColor) return BomLine.color(colorCode);
     if (isHardware) return BomLine.hardware(kind!, w!, h!, q);
     if (isBar) return BomLine.bar(group, label, length, cut, q, role: role, glassCode: glassCode);
     return BomLine.sheet(group, label, w, h, q, glassCode: glassCode!);
@@ -190,12 +211,19 @@ class SashInfo {
   });
 }
 
+class FrameBox {
+  final String id;
+  final Box box;
+  const FrameBox(this.id, this.box);
+}
+
 class LayoutResult {
   final List<Prim> prims = [];
   final List<BomLine> bom = [];
   final List<HitArea> hits = [];
   final List<double> mullionX = [], mullionY = [];
   final List<SashInfo> sashes = [];
+  final List<FrameBox> frames = [];
 
   /// Bölme id -> referans aralığı (mm). Bölme ölçüsünü düzenlerken kullanılır.
   final Map<String, double> splitSpans = {};
@@ -225,25 +253,106 @@ class LayoutEngine {
 
   LayoutResult run(WindowDesign d) {
     final out = LayoutResult();
-    final outer = Box(0, 0, d.width, d.height);
-    final threshold = d.bottom == BottomKind.threshold;
+    final root = d.root;
+    if (root is CoupleNode) {
+      _runCouple(out, d, root);
+    } else {
+      final outer = Box(0, 0, d.width, d.height);
+      out.frames.add(FrameBox('root', outer));
+      _frame(out, outer, d.bottom, root);
+    }
+    if (d.colorCode != 'white' && d.colorCode.isNotEmpty) {
+      out.bom.add(BomLine.color(d.colorCode));
+    }
+    return out;
+  }
+
+  void _runCouple(LayoutResult out, WindowDesign d, CoupleNode couple) {
+    final n = couple.children.length;
+    if (n == 0) return;
+    final gap = s.couplingGap;
+    final total = couple.sizes.fold<double>(0, (a, b) => a + b);
+    final boxes = <Box>[];
+    if (couple.dir == SplitDir.v) {
+      final usable = d.width - (n - 1) * gap;
+      var x = 0.0;
+      for (var i = 0; i < n; i++) {
+        final w = usable * couple.sizes[i] / total;
+        final h = couple.children[i].height ?? d.height;
+        final box = Box(x, 0, x + w, h);
+        boxes.add(box);
+        out.frames.add(FrameBox(couple.children[i].id, box));
+        _frame(out, box, couple.children[i].bottom, couple.children[i].child);
+        x += w + gap;
+      }
+      for (var i = 0; i < n - 1; i++) {
+        final a = boxes[i], b = boxes[i + 1];
+        final commonH = math.min(a.h, b.h);
+        final cx = a.r + gap / 2;
+        out.prims.add(BarRect(
+          DrawLayer.coupling,
+          Box(cx - s.couplingFace / 2, 0, cx + s.couplingFace / 2, commonH),
+        ));
+        out.bom.add(BomLine.bar(
+          BomGroup.profile,
+          'Birleştirme profili',
+          commonH,
+          '90/90',
+          1,
+          role: ProfileRole.coupling,
+        ));
+      }
+    } else {
+      final usable = d.height - (n - 1) * gap;
+      var y = 0.0;
+      for (var i = 0; i < n; i++) {
+        final h = usable * couple.sizes[i] / total;
+        final w = couple.children[i].width ?? d.width;
+        final box = Box(0, y, w, y + h);
+        boxes.add(box);
+        out.frames.add(FrameBox(couple.children[i].id, box));
+        _frame(out, box, couple.children[i].bottom, couple.children[i].child);
+        y += h + gap;
+      }
+      for (var i = 0; i < n - 1; i++) {
+        final a = boxes[i], b = boxes[i + 1];
+        final commonW = math.min(a.w, b.w);
+        final cy = a.b + gap / 2;
+        out.prims.add(BarRect(
+          DrawLayer.coupling,
+          Box(0, cy - s.couplingFace / 2, commonW, cy + s.couplingFace / 2),
+        ));
+        out.bom.add(BomLine.bar(
+          BomGroup.profile,
+          'Birleştirme profili',
+          commonW,
+          '90/90',
+          1,
+          role: ProfileRole.coupling,
+        ));
+      }
+    }
+  }
+
+  /// Tek kasa gövdesi: eşik dahil. [outer] kasa dış kutusu.
+  void _frame(LayoutResult out, Box outer, BottomKind bottom, DesignNode child) {
+    final threshold = bottom == BottomKind.threshold;
     final inner = threshold
-        ? Box(s.frameFace, s.frameFace, d.width - s.frameFace, d.height - s.thresholdFace)
+        ? Box(outer.l + s.frameFace, outer.t + s.frameFace, outer.r - s.frameFace, outer.b - s.thresholdFace)
         : outer.deflate(s.frameFace);
     if (threshold) {
       _frameU(out, outer, inner);
       _thresholdBom(out, outer);
       out.prims.add(BarRect(
         DrawLayer.frame,
-        Box(s.frameFace, d.height - s.thresholdFace, d.width - s.frameFace, d.height),
+        Box(outer.l + s.frameFace, outer.b - s.thresholdFace, outer.r - s.frameFace, outer.b),
         metallic: true,
       ));
     } else {
       _ring(out, DrawLayer.frame, outer, inner);
       _bars(out, 'Kasa', ProfileRole.frame, outer);
     }
-    _area(out, d.root, inner, outer, const _Edges.all(EdgeKind.frame));
-    return out;
+    _area(out, child, inner, outer, const _Edges.all(EdgeKind.frame));
   }
 
   /// Çekirdek numara: dış ve iç dikdörtgen arasında 4 gönyeli yamuk.
@@ -291,6 +400,9 @@ class LayoutEngine {
   /// [rect] net açıklık; [ref] referans çizgileri (kasa dışı veya kayıt ekseni) - ölçüler buna göre.
   void _area(LayoutResult out, DesignNode node, Box rect, Box ref, _Edges edges) {
     switch (node) {
+      case CoupleNode _:
+      case FrameNode _:
+        break; // yalnızca root / couple çocukları; alan içinde beklenmez
       case SplitNode n:
         _split(out, n, rect, ref, edges);
       case SashNode n:
@@ -467,6 +579,8 @@ class LayoutEngine {
         SashNode n => _fillIds(n.child),
         SlideNode n => [..._fillIds(n.left), ..._fillIds(n.right)],
         SplitNode n => [for (final c in n.children) ..._fillIds(c)],
+        FrameNode n => _fillIds(n.child),
+        CoupleNode n => [for (final c in n.children) ..._fillIds(c)],
       };
 
   /// DIN/EN çizim kuralı: üçgenin tepesi menteşe tarafını gösterir.

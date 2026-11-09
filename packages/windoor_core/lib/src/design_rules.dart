@@ -13,7 +13,7 @@ class RuleIssue {
 }
 
 /// [layout] üzerindeki kanat ve sabit camları [s] limitleriyle karşılaştırır.
-/// [design] verilirse adaptör bölme yapı kuralları da kontrol edilir.
+/// [design] verilirse adaptör bölme ve kasa kuralları da kontrol edilir.
 List<RuleIssue> checkDesign(LayoutResult layout, SeriesGeometry s, [WindowDesign? design]) {
   final issues = <RuleIssue>[];
   final sashFillIds = <String>{};
@@ -120,13 +120,40 @@ List<RuleIssue> checkDesign(LayoutResult layout, SeriesGeometry s, [WindowDesign
 
   if (design != null) {
     _checkAdapterSplits(design.root, issues);
+    _checkFrames(design, layout, s, issues);
   }
 
   return issues;
 }
 
+void _checkFrames(WindowDesign design, LayoutResult layout, SeriesGeometry s, List<RuleIssue> issues) {
+  final minSize = 2 * s.frameFace + 100;
+  for (final fb in layout.frames) {
+    if (fb.box.w < minSize || fb.box.h < minSize) {
+      issues.add(RuleIssue([fb.id], 'Kasa çok küçük.', true));
+    }
+  }
+  final root = design.root;
+  if (root is CoupleNode) {
+    for (final f in root.children) {
+      if (f.height != null && f.height! > design.height) {
+        issues.add(RuleIssue([f.id], 'Kasa yüksekliği tasarım yüksekliğini aşıyor.', true));
+      }
+      if (f.width != null && f.width! > design.width) {
+        issues.add(RuleIssue([f.id], 'Kasa genişliği tasarım genişliğini aşıyor.', true));
+      }
+    }
+  }
+}
+
 void _checkAdapterSplits(DesignNode node, List<RuleIssue> issues) {
   switch (node) {
+    case CoupleNode c:
+      for (final f in c.children) {
+        _checkAdapterSplits(f, issues);
+      }
+    case FrameNode f:
+      _checkAdapterSplits(f.child, issues);
     case SplitNode s:
       if (s.joint == JointKind.adapter) {
         final ids = [s.id, for (final c in s.children) c.id];

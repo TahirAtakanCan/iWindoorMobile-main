@@ -53,6 +53,26 @@ sealed class DesignNode {
       case 'slide':
         final c = (j['children'] as List).map((e) => DesignNode.fromJson(Map<String, dynamic>.from(e as Map))).toList();
         return SlideNode(id: id, left: c[0], right: c[1]);
+      case 'couple':
+        final children = (j['children'] as List)
+            .map((e) => DesignNode.fromJson(Map<String, dynamic>.from(e as Map)))
+            .whereType<FrameNode>()
+            .toList();
+        final sizes = (j['sizes'] as List).map((e) => _d(e, 1)).toList();
+        return CoupleNode(
+          id: id,
+          dir: j['dir'] == 'H' ? SplitDir.h : SplitDir.v,
+          sizes: sizes,
+          children: children,
+        );
+      case 'frame':
+        return FrameNode(
+          id: id,
+          bottom: j['bottom'] == 'threshold' ? BottomKind.threshold : BottomKind.frame,
+          height: j['height'] is num ? (j['height'] as num).toDouble() : null,
+          width: j['width'] is num ? (j['width'] as num).toDouble() : null,
+          child: DesignNode.fromJson(Map<String, dynamic>.from(j['child'] as Map)),
+        );
       case 'glass':
       case 'panel':
         final d = (j['duplex'] as List?) ?? const [1, 1];
@@ -67,6 +87,85 @@ sealed class DesignNode {
         throw FormatException('Bilinmeyen düğüm tipi: ${j['type']}');
     }
   }
+}
+
+/// Birleşik doğrama: yalnızca [WindowDesign.root] olabilir.
+class CoupleNode extends DesignNode {
+  final SplitDir dir;
+  final List<double> sizes;
+  final List<FrameNode> children;
+
+  const CoupleNode({
+    required String id,
+    required this.dir,
+    required this.sizes,
+    required this.children,
+  }) : super(id);
+
+  CoupleNode copyWith({
+    String? id,
+    SplitDir? dir,
+    List<double>? sizes,
+    List<FrameNode>? children,
+  }) =>
+      CoupleNode(
+        id: id ?? this.id,
+        dir: dir ?? this.dir,
+        sizes: sizes ?? this.sizes,
+        children: children ?? this.children,
+      );
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'type': 'couple',
+        'dir': dir == SplitDir.v ? 'V' : 'H',
+        'sizes': sizes,
+        'children': children.map((c) => c.toJson()).toList(),
+      };
+}
+
+/// Birleşik doğrama içindeki tek kasa.
+class FrameNode extends DesignNode {
+  final BottomKind bottom;
+  final double? height;
+  final double? width;
+  final DesignNode child;
+
+  const FrameNode({
+    required String id,
+    required this.child,
+    this.bottom = BottomKind.frame,
+    this.height,
+    this.width,
+  }) : super(id);
+
+  FrameNode copyWith({
+    String? id,
+    BottomKind? bottom,
+    double? height,
+    double? width,
+    DesignNode? child,
+    bool clearHeight = false,
+    bool clearWidth = false,
+  }) =>
+      FrameNode(
+        id: id ?? this.id,
+        bottom: bottom ?? this.bottom,
+        height: clearHeight ? null : (height ?? this.height),
+        width: clearWidth ? null : (width ?? this.width),
+        child: child ?? this.child,
+      );
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'type': 'frame',
+        if (bottom != BottomKind.frame) 'bottom': 'threshold',
+        if (height != null) 'height': height,
+        if (width != null) 'width': width,
+        'child': child.toJson(),
+      };
 }
 
 /// Alanı dikey (V: yan yana) ya da yatay (H: alt alta) orta kayıtlarla böler.
@@ -214,15 +313,19 @@ class WindowDesign {
     this.bottom = BottomKind.frame,
   });
 
-  /// Yeni özelliklerden hiçbiri yoksa 1, varsa 2.
+  /// Yeni özelliklerden hiçbiri yoksa 1, varsa 2. Couple her zaman 2.
   int get schemaVersion => _usesV2 ? 2 : 1;
 
   bool get _usesV2 {
+    if (root is CoupleNode) return true;
     if (bottom != BottomKind.frame) return true;
     return _nodeUsesV2(root);
   }
 
   static bool _nodeUsesV2(DesignNode n) => switch (n) {
+        CoupleNode _ => true,
+        FrameNode f =>
+          f.bottom != BottomKind.frame || f.height != null || f.width != null || _nodeUsesV2(f.child),
         SplitNode s => s.joint != JointKind.mullion || s.children.any(_nodeUsesV2),
         SashNode s => s.kind != SashKind.window || s.passive || s.outward || _nodeUsesV2(s.child),
         SlideNode s => _nodeUsesV2(s.left) || _nodeUsesV2(s.right),

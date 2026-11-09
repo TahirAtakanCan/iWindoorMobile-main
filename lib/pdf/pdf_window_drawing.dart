@@ -53,16 +53,22 @@ pw.Widget pdfWindowDrawing({
   bool showDimensions = true,
 }) {
   final fsMm = math.max(design.width, design.height) / 30;
-  final xs = [0.0, ..._uniq(layout.mullionX), design.width];
+  final frameXs = <double>{0.0, design.width};
+  for (final f in layout.frames) {
+    frameXs.add(f.box.l);
+    frameXs.add(f.box.r);
+  }
+  final xs = [..._uniq([...layout.mullionX, ...frameXs])];
   final ys = [0.0, ..._uniq(layout.mullionY), design.height];
   final hasX = xs.length > 2, hasY = ys.length > 2;
+  final multiHeight = layout.frames.length > 1;
   final chainGap = fsMm * 2.4;
 
   // İki ölçü zinciri + yazılar kesilmesin (DesignPainter pad mantığı, dinamik alt/sol).
   final padL = showDimensions ? math.max(240.0, 80 + (hasY ? chainGap : 0) + fsMm * 1.8) : 30.0;
   final padB = showDimensions ? math.max(240.0, 80 + (hasX ? chainGap : 0) + fsMm * 1.8) : 30.0;
   final padT = showDimensions ? 50.0 : 30.0;
-  final padR = showDimensions ? 50.0 : 30.0;
+  final padR = showDimensions ? math.max(50.0, multiHeight ? 120.0 : 50.0) : 30.0;
 
   final totalW = design.width + padL + padR;
   final totalH = design.height + padT + padB;
@@ -74,7 +80,18 @@ pw.Widget pdfWindowDrawing({
 
   final labels = <pw.Widget>[];
   if (showDimensions) {
-    labels.addAll(_dimLabels(xf, xs, ys, hasX, hasY, design.width, design.height, fsMm, fs));
+    labels.addAll(_dimLabels(
+      xf,
+      xs,
+      ys,
+      hasX,
+      hasY,
+      design.width,
+      design.height,
+      fsMm,
+      fs,
+      frames: layout.frames,
+    ));
   }
 
   return pw.SizedBox(
@@ -115,8 +132,9 @@ List<pw.Widget> _dimLabels(
   double designW,
   double designH,
   double fsMm,
-  double fs,
-) {
+  double fs, {
+  List<FrameBox> frames = const [],
+}) {
   final fontSize = fs.clamp(6.0, 11.0);
   final out = <pw.Widget>[];
 
@@ -143,7 +161,8 @@ List<pw.Widget> _dimLabels(
     }
   }
 
-  void addVert(List<double> v, double offMm) {
+  void addVert(List<double> v, double offMm, {double fontScale = 1}) {
+    final localFs = (fontSize * fontScale).clamp(5.0, 11.0);
     for (var i = 0; i < v.length - 1; i++) {
       final mid = (v[i] + v[i + 1]) / 2;
       final label = '${(v[i + 1] - v[i]).round()}';
@@ -151,16 +170,16 @@ List<pw.Widget> _dimLabels(
       final anchorX = xf.x(offMm - fsMm * 0.25);
       final midTop = xf.topFromMm(mid);
       out.add(pw.Positioned(
-        left: anchorX - fontSize * 1.2,
-        top: midTop - fontSize * 1.2,
+        left: anchorX - localFs * 1.2,
+        top: midTop - localFs * 1.2,
         child: pw.Transform.rotate(
           angle: math.pi / 2,
           child: pw.SizedBox(
-            width: fontSize * 2.4,
+            width: localFs * 2.4,
             child: pw.Text(
               label,
               textAlign: pw.TextAlign.center,
-              style: pw.TextStyle(fontSize: fontSize, color: PdfColors.grey800),
+              style: pw.TextStyle(fontSize: localFs, color: PdfColors.grey800),
             ),
           ),
         ),
@@ -172,6 +191,12 @@ List<pw.Widget> _dimLabels(
   addHoriz([0, designW], designH + 80 + (hasX ? fsMm * 2.4 : 0));
   if (hasY) addVert(ys, -80);
   addVert([0, designH], -80 - (hasY ? fsMm * 2.4 : 0));
+  if (frames.length > 1) {
+    for (final f in frames) {
+      if ((f.box.h - designH).abs() < 0.5) continue;
+      addVert([f.box.t, f.box.b], f.box.r + 60, fontScale: 0.85);
+    }
+  }
   return out;
 }
 
@@ -252,7 +277,7 @@ void _paintGeometry(
   }
 
   if (showDimensions) {
-    _dimLines(canvas, xf, xs, ys, hasX, hasY, designW, designH, fsMm);
+    _dimLines(canvas, xf, xs, ys, hasX, hasY, designW, designH, fsMm, frames: layout.frames);
   }
 }
 
@@ -423,8 +448,9 @@ void _dimLines(
   bool hasY,
   double designW,
   double designH,
-  double fsMm,
-) {
+  double fsMm, {
+  List<FrameBox> frames = const [],
+}) {
   void chain(List<double> v, bool horiz, double off) {
     c.setStrokeColor(PdfColors.grey800);
     c.setLineWidth(0.6);
@@ -461,4 +487,10 @@ void _dimLines(
   chain([0, designW], true, designH + 80 + (hasX ? fsMm * 2.4 : 0));
   if (hasY) chain(ys, false, -80);
   chain([0, designH], false, -80 - (hasY ? fsMm * 2.4 : 0));
+  if (frames.length > 1) {
+    for (final f in frames) {
+      if ((f.box.h - designH).abs() < 0.5) continue;
+      chain([f.box.t, f.box.b], false, f.box.r + 60);
+    }
+  }
 }

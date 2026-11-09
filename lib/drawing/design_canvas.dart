@@ -14,6 +14,7 @@ class DesignCanvas extends StatelessWidget {
   final ValueChanged<String?>? onSelect;
   final bool showDimensions;
   final bool showLabels;
+  final ProfileColor? color;
 
   const DesignCanvas({
     super.key,
@@ -25,6 +26,7 @@ class DesignCanvas extends StatelessWidget {
     this.onSelect,
     this.showDimensions = true,
     this.showLabels = false,
+    this.color,
   });
 
   @override
@@ -37,7 +39,7 @@ class DesignCanvas extends StatelessWidget {
         designW: design.width,
         designH: design.height,
         lookOf: lookOf,
-        color: ProfileColor.of(design.colorCode),
+        color: color ?? ProfileColor.of(design.colorCode),
         selectedId: selectedId,
         issueIds: issueIds,
         showDimensions: showDimensions,

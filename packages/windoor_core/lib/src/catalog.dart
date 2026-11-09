@@ -19,6 +19,8 @@ class SeriesGeometry {
   final double doorSashFace;
   final double thresholdFace;
   final double thresholdEndAllowance;
+  final double couplingFace;
+  final double couplingGap;
   final double minSashWidth;
   final double minSashHeight;
   final double maxSashWidth;
@@ -48,6 +50,8 @@ class SeriesGeometry {
     this.doorSashFace = 110,
     this.thresholdFace = 20,
     this.thresholdEndAllowance = 0,
+    this.couplingFace = 20,
+    this.couplingGap = 0,
     this.minSashWidth = 350,
     this.minSashHeight = 350,
     this.maxSashWidth = 1400,
@@ -86,6 +90,8 @@ class SeriesGeometry {
       doorSashFace: d('doorSashFace', 110),
       thresholdFace: d('thresholdFace', 20),
       thresholdEndAllowance: d('thresholdEndAllowance', 0),
+      couplingFace: d('couplingFace', 20),
+      couplingGap: d('couplingGap', 0),
       minSashWidth: d('minSashWidth', 350),
       minSashHeight: d('minSashHeight', 350),
       maxSashWidth: d('maxSashWidth', 1400),

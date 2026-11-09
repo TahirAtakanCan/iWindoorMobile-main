@@ -4,6 +4,7 @@ import 'package:windoor_core/windoor_core.dart';
 
 import '../../drawing/design_canvas.dart';
 import '../../services/design_api.dart';
+import '../../services/offline/connectivity_state.dart';
 import '../../services/template_api.dart';
 import '../../widgets/opening_icon.dart';
 import 'cut_list_sheet.dart';
@@ -313,9 +314,20 @@ class _DesignEditorScreenState extends State<DesignEditorScreen> {
                           child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
                         )
                       : IconButton(
-                          tooltip: 'Kaydet (Ctrl+S)',
-                          icon: const Icon(Icons.save),
-                          onPressed: c.dirty ? _save : null,
+                          tooltip: ConnectivityState.instance.isOffline
+                              ? 'Çevrimdışı — kaydetmek için bağlantı gerekli'
+                              : 'Kaydet (Ctrl+S)',
+                          icon: Icon(
+                            Icons.save,
+                            color: ConnectivityState.instance.isOffline ? Colors.grey : null,
+                          ),
+                          onPressed: ConnectivityState.instance.isOffline
+                              ? () {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Çevrimdışı — kaydetmek için bağlantı gerekli')),
+                                  );
+                                }
+                              : (c.dirty ? _save : null),
                         ),
                 ),
               ],

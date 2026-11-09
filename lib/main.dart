@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'services/auth_service.dart';
+import 'services/offline/connectivity_state.dart';
+import 'services/offline/survey_outbox.dart';
 import 'config/app_config.dart';
+import 'widgets/offline_banner.dart';
 
 /// Pencere hemen açılır (Windows'ta pencere ilk kare çizilince görünür).
 /// Ayarlar ve oturum durumu açılış ekranında okunur; hata olursa ekranda yazılır.
@@ -25,6 +28,14 @@ class MyApp extends StatelessWidget {
         // Masaüstünde fare ile daha sık yerleşim
         visualDensity: AppConfig.isDesktop ? VisualDensity.compact : VisualDensity.standard,
       ),
+      builder: (context, child) {
+        return Column(
+          children: [
+            const OfflineBanner(),
+            Expanded(child: child ?? const SizedBox.shrink()),
+          ],
+        );
+      },
       home: const _Bootstrap(),
     );
   }
@@ -59,6 +70,11 @@ class _BootstrapState extends State<_Bootstrap> {
     } catch (e) {
       errors.add('Ayarlar okunamadı: $e');
     }
+    try {
+      ConnectivityState.instance.attachLifecycle();
+      await SurveyOutbox.instance.ensureReady();
+      ConnectivityState.instance.setPendingOutbox(SurveyOutbox.instance.pendingCount);
+    } catch (_) {}
     try {
       _loggedIn = await AuthService().isLoggedIn().timeout(const Duration(seconds: 5));
     } catch (e) {

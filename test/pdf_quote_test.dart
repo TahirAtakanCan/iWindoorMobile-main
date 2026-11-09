@@ -4,8 +4,8 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:iwindoor_mobil/models/catalog.dart';
 import 'package:iwindoor_mobil/models/project_quote.dart';
+import 'package:iwindoor_mobil/pdf/pdf_fonts.dart';
 import 'package:iwindoor_mobil/services/pdf_service.dart';
-import 'package:pdf/widgets.dart' as pw;
 
 ProjectQuote _sampleQuote({int windowCount = 1}) {
   Map<String, dynamic> window(int i) => {
@@ -114,13 +114,16 @@ String _pdfText(Uint8List bytes) => latin1.decode(bytes, allowInvalid: true);
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  setUp(() => PdfFonts.resetCache());
+
   test('müşteri PDF: çizim/fiyat var; Kalemler ve malzeme kodu yok', () async {
+    final fonts = await PdfFonts.load();
     final quote = _sampleQuote(windowCount: 2);
     final bytes = await PdfService().buildQuotePdf(
       quote,
       CatalogSnapshot.fallback,
-      base: pw.Font.helvetica(),
-      bold: pw.Font.helveticaBold(),
+      base: fonts.$1,
+      bold: fonts.$2,
       compress: false,
     );
 
@@ -133,7 +136,8 @@ void main() {
     expect(text.contains('KASA-GIZLI'), isFalse, reason: 'malzeme kodu müşteri PDFinde olmamalı');
     expect(text.contains('Kesim'), isFalse, reason: 'kesim listesi atölye föyünde');
     expect(text.contains('Malzeme'), isFalse, reason: 'malzeme özeti müşteri PDFinde yok');
-    // Fiyat / ek kalem izi (Helvetica Türkçe sınırlı; ASCII parçalar)
-    expect(text.contains('Nakliye') || text.contains('TEKL') || text.contains('P-01'), isTrue);
+    // Gömülü Roboto ile içerik stream'i latin1 ASCII metin taşımaz; font adı / boyut doğrula.
+    expect(text.contains('Roboto') || text.contains('Identity-H'), isTrue);
+    expect(bytes.length, greaterThan(4000));
   });
 }

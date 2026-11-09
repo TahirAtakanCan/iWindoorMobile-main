@@ -4,9 +4,9 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:windoor_core/windoor_core.dart';
 
-import '../config/app_config.dart';
 import '../models/catalog.dart';
-import 'auth_service.dart';
+import 'offline/api_dio.dart';
+import 'offline/offline_exception.dart';
 
 /// Sunucunun döndüğü pencere + tasarım belgesi (GET/PUT /api/v1/windows/{id}).
 class WindowDoc {
@@ -93,7 +93,11 @@ class ApiError implements Exception {
 
   factory ApiError.from(Object e) {
     if (e is ApiError) return e;
+    if (e is OfflineException) return ApiError(null, 'OFFLINE', e.message);
     if (e is DioException) {
+      if (e.error is OfflineException) {
+        return ApiError(null, 'OFFLINE', (e.error as OfflineException).message);
+      }
       final r = e.response;
       if (r == null) {
         return const ApiError(null, 'NETWORK', 'Sunucuya ulaşılamadı. Sunucu adresini ve bağlantıyı kontrol edin.');
@@ -124,22 +128,7 @@ class DesignApi {
 
   final Dio _dio;
 
-  DesignApi({Dio? dio})
-      : _dio = dio ??
-            Dio(BaseOptions(
-              baseUrl: AppConfig.apiUrl,
-              connectTimeout: const Duration(seconds: 8),
-              receiveTimeout: const Duration(seconds: 15),
-              contentType: Headers.jsonContentType,
-            )) {
-    if (dio == null) {
-      _dio.interceptors.add(InterceptorsWrapper(onRequest: (options, handler) async {
-        final token = await AuthService().getToken();
-        if (token != null) options.headers['Authorization'] = 'Bearer $token';
-        handler.next(options);
-      }));
-    }
-  }
+  DesignApi({Dio? dio}) : _dio = dio ?? createApiDio();
 
   Future<T> _call<T>(Future<T> Function() f) async {
     try {

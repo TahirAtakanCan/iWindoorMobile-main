@@ -11,6 +11,7 @@ import '../models/payment.dart';
 import '../models/project.dart';
 import '../utils/amount_words.dart';
 import '../utils/format.dart';
+import 'pdf_fonts.dart';
 
 class ReceiptPdf {
   Future<Uint8List> build({
@@ -19,9 +20,8 @@ class ReceiptPdf {
     required Payment payment,
     required double balanceAfter,
   }) async {
-    final font = await PdfGoogleFonts.robotoRegular();
-    final bold = await PdfGoogleFonts.robotoBold();
-    final doc = pw.Document(theme: pw.ThemeData.withFont(base: font, bold: bold));
+    final fonts = await PdfFonts.load();
+    final doc = pw.Document(theme: pw.ThemeData.withFont(base: fonts.$1, bold: fonts.$2));
     final words = amountToWordsTr(payment.signedAmount);
     final isRefund = payment.isRefund;
 

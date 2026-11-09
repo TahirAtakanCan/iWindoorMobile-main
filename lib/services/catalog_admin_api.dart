@@ -1,9 +1,8 @@
 import 'package:dio/dio.dart';
 
-import '../config/app_config.dart';
 import '../models/catalog.dart';
-import 'auth_service.dart';
 import 'design_api.dart';
+import 'offline/api_dio.dart';
 
 /// Katalog yönetim uçları. Her yazmadan sonra [DesignApi] önbelleğini geçersiz kılar.
 class CatalogAdminApi {
@@ -12,21 +11,7 @@ class CatalogAdminApi {
 
   CatalogAdminApi({Dio? dio, DesignApi? designApi})
       : _designApi = designApi ?? DesignApi(),
-        _dio = dio ??
-            Dio(BaseOptions(
-              baseUrl: AppConfig.apiUrl,
-              connectTimeout: const Duration(seconds: 8),
-              receiveTimeout: const Duration(seconds: 20),
-              contentType: Headers.jsonContentType,
-            )) {
-    if (dio == null) {
-      _dio.interceptors.add(InterceptorsWrapper(onRequest: (options, handler) async {
-        final token = await AuthService().getToken();
-        if (token != null) options.headers['Authorization'] = 'Bearer $token';
-        handler.next(options);
-      }));
-    }
-  }
+        _dio = dio ?? createApiDio(receiveTimeout: const Duration(seconds: 20));
 
   Future<T> _call<T>(Future<T> Function() f, {bool invalidate = false}) async {
     try {

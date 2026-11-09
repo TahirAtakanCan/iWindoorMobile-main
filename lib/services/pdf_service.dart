@@ -12,6 +12,7 @@ import '../models/catalog.dart';
 import '../models/company.dart';
 import '../models/project_quote.dart';
 import '../models/quote_version.dart';
+import '../pdf/pdf_fonts.dart';
 import '../pdf/pdf_window_drawing.dart';
 import '../utils/cost_breakdown.dart';
 import '../utils/design_summary.dart';
@@ -108,8 +109,9 @@ class PdfService {
     pw.Font? bold,
     bool compress = true,
   }) async {
-    final font = base ?? await PdfGoogleFonts.robotoRegular();
-    final fontBold = bold ?? await PdfGoogleFonts.robotoBold();
+    final loaded = await PdfFonts.load();
+    final font = base ?? loaded.$1;
+    final fontBold = bold ?? loaded.$2;
     final theme = pw.ThemeData.withFont(base: font, bold: fontBold);
     final pdf = pw.Document(theme: theme, compress: compress);
     final currency = q.currency;
@@ -185,9 +187,8 @@ class PdfService {
     required String projectName,
     required List<({String room, String type, String opening, int qty, String? note})> rows,
   }) async {
-    final font = await PdfGoogleFonts.robotoRegular();
-    final bold = await PdfGoogleFonts.robotoBold();
-    final doc = pw.Document(theme: pw.ThemeData.withFont(base: font, bold: bold));
+    final fonts = await PdfFonts.load();
+    final doc = pw.Document(theme: pw.ThemeData.withFont(base: fonts.$1, bold: fonts.$2));
     doc.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
@@ -231,8 +232,9 @@ class PdfService {
       throw StateError('Maliyet özeti yok.');
     }
     final cost = enrichCostSummary(q);
-    final font = base ?? await PdfGoogleFonts.robotoRegular();
-    final fontBold = bold ?? await PdfGoogleFonts.robotoBold();
+    final loaded = await PdfFonts.load();
+    final font = base ?? loaded.$1;
+    final fontBold = bold ?? loaded.$2;
     final pdf = pw.Document(theme: pw.ThemeData.withFont(base: font, bold: fontBold), compress: compress);
     final rows = cost.windows;
     pdf.addPage(

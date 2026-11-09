@@ -26,6 +26,7 @@ import 'production/production_screen.dart';
 import 'project_history_screen.dart';
 import 'project_quote_screen.dart';
 import 'project_specs_screen.dart';
+import '../services/offline/offline_project_store.dart';
 import 'survey/survey_screen.dart';
 import 'templates/template_picker_screen.dart';
 import 'versions/version_list_screen.dart';
@@ -361,6 +362,49 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       context,
       MaterialPageRoute(builder: (_) => ProjectQuoteScreen(projectId: widget.projectId)),
     );
+  }
+
+  Future<void> _makeOfflineAvailable(int projectId) async {
+    final progress = ValueNotifier<(String, double)>(('Başlıyor…', 0));
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => ValueListenableBuilder<(String, double)>(
+        valueListenable: progress,
+        builder: (_, v, __) => AlertDialog(
+          title: const Text('Çevrimdışı indiriliyor'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              LinearProgressIndicator(value: v.$2 <= 0 ? null : v.$2),
+              const SizedBox(height: 12),
+              Text(v.$1),
+            ],
+          ),
+        ),
+      ),
+    );
+    try {
+      await OfflineProjectStore.downloadAll(
+        projectId,
+        onProgress: (s, p) => progress.value = (s, p),
+      );
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Proje çevrimdışı kullanılabilir.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      progress.dispose();
+    }
   }
 
   Future<void> _showAddWindowDialog() async {
@@ -848,12 +892,18 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                         ),
                       );
                       if (mounted) _refreshProject();
+                    case 'offline':
+                      await _makeOfflineAvailable(project.id);
                   }
                 },
                 itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
                   const PopupMenuItem<String>(
                     value: 'edit',
                     child: ListTile(leading: Icon(Icons.edit), title: Text('Proje Bilgileri'), contentPadding: EdgeInsets.zero),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'offline',
+                    child: ListTile(leading: Icon(Icons.offline_pin), title: Text('Çevrimdışı kullanılabilir yap'), contentPadding: EdgeInsets.zero),
                   ),
                   const PopupMenuItem<String>(
                     value: 'versions',

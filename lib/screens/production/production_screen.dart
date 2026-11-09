@@ -14,6 +14,7 @@ import 'package:windoor_core/windoor_core.dart';
 import '../../models/catalog.dart';
 import '../../models/company.dart';
 import '../../models/project.dart';
+import '../../pdf/pdf_fonts.dart';
 import '../../pdf/workshop_pdf.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
@@ -256,9 +257,8 @@ class _ProductionScreenState extends State<ProductionScreen> with SingleTickerPr
   }
 
   Future<Uint8List> _buildGlassPdf(Project project, CompanyProfile company, GlassOrder glass) async {
-    final font = await PdfGoogleFonts.robotoRegular();
-    final fontBold = await PdfGoogleFonts.robotoBold();
-    final doc = pw.Document(theme: pw.ThemeData.withFont(base: font, bold: fontBold));
+    final fonts = await PdfFonts.load();
+    final doc = pw.Document(theme: pw.ThemeData.withFont(base: fonts.$1, bold: fonts.$2));
     final now = DateTime.now();
     final date = '${now.day.toString().padLeft(2, '0')}.${now.month.toString().padLeft(2, '0')}.${now.year}';
     final widgets = <pw.Widget>[

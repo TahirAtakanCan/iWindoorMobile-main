@@ -2,7 +2,6 @@ import 'dart:typed_data';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import 'package:windoor_core/windoor_core.dart';
 
 import '../drawing/glass_look.dart';
@@ -12,6 +11,7 @@ import '../models/project.dart';
 import '../services/production_planner.dart';
 import '../utils/bom_display.dart';
 import '../utils/format.dart';
+import 'pdf_fonts.dart';
 import 'pdf_window_drawing.dart';
 
 String _dateTr(DateTime d) {
@@ -36,9 +36,8 @@ class WorkshopPdf {
     DateTime? at,
   }) async {
     final minOffcut = minOffcutMm ?? company.minOffcutMm;
-    final font = await PdfGoogleFonts.robotoRegular();
-    final fontBold = await PdfGoogleFonts.robotoBold();
-    final theme = pw.ThemeData.withFont(base: font, bold: fontBold);
+    final fonts = await PdfFonts.load();
+    final theme = pw.ThemeData.withFont(base: fonts.$1, bold: fonts.$2);
     final pdf = pw.Document(theme: theme);
     final when = at ?? DateTime.now();
     final positions = ProductionPlanner.positions(project, catalog);

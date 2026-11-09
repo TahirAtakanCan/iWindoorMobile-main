@@ -10,6 +10,8 @@ import '../../services/company_api.dart';
 import '../../services/design_api.dart';
 import '../../services/pdf_service.dart';
 import '../../services/survey_api.dart';
+import '../../services/offline/connectivity_state.dart';
+import '../../services/offline/survey_outbox.dart';
 import '../../utils/survey_helpers.dart';
 import '../../utils/template_create.dart';
 import '../design_editor/design_editor_screen.dart';
@@ -185,6 +187,12 @@ class _SurveyScreenState extends State<SurveyScreen> {
 
   Future<void> _convertOne(SurveyItem item) async {
     if (item.isLinked) return;
+    if (ConnectivityState.instance.isOffline || item.id < 0 || SurveyOutbox.instance.isPendingTempId(item.id)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tasarıma çevir için çevrimiçi olun; bekleyen keşif kayıtları önce eşitlenmeli.')),
+      );
+      return;
+    }
     final doc = await Navigator.push<WindowDoc>(
       context,
       MaterialPageRoute(
@@ -239,7 +247,13 @@ class _SurveyScreenState extends State<SurveyScreen> {
   }
 
   Future<void> _convertAll() async {
-    final pending = _items.where((e) => !e.isLinked).toList();
+    if (ConnectivityState.instance.isOffline) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Çevrimdışıyken tasarıma çevirme yapılamaz.')),
+      );
+      return;
+    }
+    final pending = _items.where((e) => !e.isLinked && e.id > 0).toList();
     if (pending.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Çevrilecek kalem yok.')));
       return;
@@ -478,6 +492,8 @@ class _SurveyScreenState extends State<SurveyScreen> {
                                       child: Text('${item.room} · ${surveyProductTr(item.productType)}',
                                           style: const TextStyle(fontWeight: FontWeight.w600)),
                                     ),
+                                    if (item.id < 0 || SurveyOutbox.instance.isPendingTempId(item.id))
+                                      const Icon(Icons.schedule, size: 18, color: Colors.orange),
                                     if (item.isLinked)
                                       TextButton(
                                         onPressed: () {
@@ -495,7 +511,12 @@ class _SurveyScreenState extends State<SurveyScreen> {
                                         child: const Text('Tasarıma çevrildi'),
                                       )
                                     else
-                                      TextButton(onPressed: () => _convertOne(item), child: const Text('Tasarıma çevir')),
+                                      TextButton(
+                                        onPressed: (item.id < 0 || ConnectivityState.instance.isOffline)
+                                            ? null
+                                            : () => _convertOne(item),
+                                        child: const Text('Tasarıma çevir'),
+                                      ),
                                   ],
                                 ),
                                 Text(

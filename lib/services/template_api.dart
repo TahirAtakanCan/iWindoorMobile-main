@@ -1,9 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:windoor_core/windoor_core.dart';
 
-import '../config/app_config.dart';
-import 'auth_service.dart';
 import 'design_api.dart';
+import 'offline/api_dio.dart';
 
 /// Firma şablonu: GET/POST /api/v1/templates.
 class CompanyTemplate {
@@ -45,22 +44,7 @@ class CompanyTemplate {
 class TemplateApi {
   final Dio _dio;
 
-  TemplateApi({Dio? dio})
-      : _dio = dio ??
-            Dio(BaseOptions(
-              baseUrl: AppConfig.apiUrl,
-              connectTimeout: const Duration(seconds: 8),
-              receiveTimeout: const Duration(seconds: 15),
-              contentType: Headers.jsonContentType,
-            )) {
-    if (dio == null) {
-      _dio.interceptors.add(InterceptorsWrapper(onRequest: (options, handler) async {
-        final token = await AuthService().getToken();
-        if (token != null) options.headers['Authorization'] = 'Bearer $token';
-        handler.next(options);
-      }));
-    }
-  }
+  TemplateApi({Dio? dio}) : _dio = dio ?? createApiDio();
 
   Future<T> _call<T>(Future<T> Function() f) async {
     try {

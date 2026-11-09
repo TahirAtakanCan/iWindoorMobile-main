@@ -20,6 +20,8 @@ import 'catalog/catalog_screen.dart';
 import 'company_settings_screen.dart';
 import 'employee_list_screen.dart';
 import 'login_screen.dart';
+import 'offline/offline_data_screen.dart';
+import '../services/offline/offline_project_store.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -34,6 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late Future<List<Project>> _projectsFuture;
   DashboardSummary? _dashboard;
   ProjectStatus? _statusFilter;
+  Set<int> _offlineIds = {};
   String _userName = "Yükleniyor...";
   String _userEmail = "";
 
@@ -64,6 +67,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _refreshAll() async {
     _refreshProjects();
+    final offline = await OfflineProjectStore.ids();
+    if (mounted) setState(() => _offlineIds = offline);
     try {
       final dash = await _customerApi.dashboard();
       if (mounted) setState(() => _dashboard = dash);
@@ -320,6 +325,14 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
             ListTile(
+              leading: const Icon(Icons.offline_pin_outlined),
+              title: const Text("Çevrimdışı veriler"),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const OfflineDataScreen()));
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.people),
               title: const Text("Çalışanlar"),
               onTap: () {
@@ -471,6 +484,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         title: Row(
                           children: [
                             Expanded(child: Text(project.name, style: const TextStyle(fontWeight: FontWeight.bold))),
+                            if (_offlineIds.contains(project.id))
+                              const Padding(
+                                padding: EdgeInsets.only(right: 6),
+                                child: Icon(Icons.offline_pin, size: 18, color: Colors.teal),
+                              ),
                             StatusBadge(status: project.status, compact: true),
                           ],
                         ),

@@ -1,43 +1,17 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import '../config/app_config.dart';
 import 'package:iwindoor_mobil/models/cost_summary.dart';
 import 'package:iwindoor_mobil/models/profile.dart';
 import '../models/project.dart';
 import '../models/project_specs.dart';
-import 'auth_service.dart';
 import '../models/user_model.dart';
+import 'offline/api_dio.dart';
 
 class ApiService {
-  // Android Emulator için: 10.0.2.2
-  // iOS Simulator için: 127.0.0.1 veya localhost
-  // Gerçek Cihaz için: Bilgisayarının IP adresi (örn: 192.168.1.35)
-  // Sunucu adresi AppConfig'ten gelir (giriş ekranındaki ayar düğmesiyle değiştirilebilir).
-  final Dio _dio = Dio(BaseOptions(
-    baseUrl: AppConfig.apiUrl,
-    connectTimeout: const Duration(seconds: 8),
-    receiveTimeout: const Duration(seconds: 15),
-  ));
-  
-  ApiService() {
-    // HER İSTEKTE TOKEN EKLEME MANTIĞI
-    _dio.interceptors.add(InterceptorsWrapper(
-      onRequest: (options, handler) async {
-        final token = await AuthService().getToken();
-        if (token != null) {
-          options.headers['Authorization'] = 'Bearer $token'; // Token'ı başlığa ekle
-        }
-        return handler.next(options);
-      },
-      onError: (DioException e, handler) {
-        if (e.response?.statusCode == 401) {
-          // Token yok / süresi dolmuş. (403 = bu kayda yetki yok)
-          debugPrint("Oturum geçersiz (401)");
-        }
-        return handler.next(e);
-      },
-    ));
-  }  
+  final Dio _dio;
+
+  ApiService({Dio? dio}) : _dio = dio ?? createApiDio();
+
 
   Future<Project?> getProject(int id) async {
     try {

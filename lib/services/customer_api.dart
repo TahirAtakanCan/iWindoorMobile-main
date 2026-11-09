@@ -1,33 +1,17 @@
 import 'package:dio/dio.dart';
 
-import '../config/app_config.dart';
 import '../models/customer.dart';
 import '../models/dashboard.dart';
 import '../models/payment.dart';
 import '../models/project.dart';
 import '../utils/status.dart';
-import 'auth_service.dart';
 import 'design_api.dart';
+import 'offline/api_dio.dart';
 
 class CustomerApi {
   final Dio _dio;
 
-  CustomerApi({Dio? dio})
-      : _dio = dio ??
-            Dio(BaseOptions(
-              baseUrl: AppConfig.apiUrl,
-              connectTimeout: const Duration(seconds: 8),
-              receiveTimeout: const Duration(seconds: 15),
-              contentType: Headers.jsonContentType,
-            )) {
-    if (dio == null) {
-      _dio.interceptors.add(InterceptorsWrapper(onRequest: (options, handler) async {
-        final token = await AuthService().getToken();
-        if (token != null) options.headers['Authorization'] = 'Bearer $token';
-        handler.next(options);
-      }));
-    }
-  }
+  CustomerApi({Dio? dio}) : _dio = dio ?? createApiDio();
 
   Future<T> _call<T>(Future<T> Function() f) async {
     try {

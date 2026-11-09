@@ -6,18 +6,42 @@ import '../drawing/glass_look.dart';
 import '../models/catalog.dart';
 import '../models/window_unit.dart';
 
-/// Proje ekranındaki pencere kartı. Yeni çizim motoruyla çizer (eski pencereler dönüştürülür).
+/// Tasarım küçük resmi: proje kartı veya şablon seçici.
 class DesignThumbnail extends StatelessWidget {
-  final WindowUnit unit;
+  final WindowDesign design;
+  final String title;
+  final String subtitle;
   final CatalogSnapshot? catalog;
+  final Object? seriesId;
+  final bool showCaption;
 
-  const DesignThumbnail({super.key, required this.unit, this.catalog});
+  const DesignThumbnail({
+    super.key,
+    required this.design,
+    required this.title,
+    required this.subtitle,
+    this.catalog,
+    this.seriesId,
+    this.showCaption = true,
+  });
+
+  factory DesignThumbnail.unit(WindowUnit unit, {Key? key, CatalogSnapshot? catalog}) {
+    return DesignThumbnail(
+      key: key,
+      design: unit.previewDesign,
+      title: unit.name,
+      subtitle: '${unit.width.toInt()} × ${unit.height.toInt()} mm'
+          '${unit.quantity > 1 ? '  ·  ${unit.quantity} adet' : ''}'
+          '${unit.unitPrice != null ? '  ·  ${unit.unitPrice!.toStringAsFixed(0)} TL' : ''}',
+      catalog: catalog,
+      seriesId: unit.seriesId,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final design = unit.previewDesign;
     final cat = catalog ?? CatalogSnapshot.fallback;
-    final layout = LayoutEngine(cat.seriesFor(unit.seriesId).geometry).run(design);
+    final layout = LayoutEngine(cat.seriesFor(seriesId ?? design.seriesId).geometry).run(design);
     final scheme = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
@@ -38,25 +62,24 @@ class DesignThumbnail extends StatelessWidget {
               ),
             ),
           ),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerHighest.withValues(alpha: .5),
-              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(8)),
-            ),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(unit.name,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12), overflow: TextOverflow.ellipsis),
-              Text(
-                '${unit.width.toInt()} × ${unit.height.toInt()} mm'
-                '${unit.quantity > 1 ? '  ·  ${unit.quantity} adet' : ''}'
-                '${unit.unitPrice != null ? '  ·  ${unit.unitPrice!.toStringAsFixed(0)} TL' : ''}',
-                style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant),
-                overflow: TextOverflow.ellipsis,
+          if (showCaption)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHighest.withValues(alpha: .5),
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(8)),
               ),
-            ]),
-          ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12), overflow: TextOverflow.ellipsis),
+                Text(
+                  subtitle,
+                  style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ]),
+            ),
         ],
       ),
     );

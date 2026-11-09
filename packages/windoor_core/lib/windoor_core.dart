@@ -7,3 +7,4 @@ export 'src/edit_ops.dart';
 export 'src/layout_engine.dart';
 export 'src/legacy.dart';
 export 'src/model.dart';
+export 'src/templates.dart';

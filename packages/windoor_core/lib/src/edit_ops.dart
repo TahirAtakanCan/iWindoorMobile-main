@@ -195,6 +195,28 @@ class DesignOps {
     return d.copyWith(root: root);
   }
 
+  /// Katalogda olmayan veya pasif kodları varsayılan cam/panel koduyla değiştirir.
+  static WindowDesign replaceUnknownCodes(
+    WindowDesign d,
+    Set<String> knownGlass,
+    Set<String> knownPanel, {
+    required String glass,
+    String? panel,
+  }) {
+    var root = d.root;
+    for (final f in fills(root)) {
+      if (f.fill == FillType.panel) {
+        if (!knownPanel.contains(f.glassCode)) {
+          final code = (panel ?? glass);
+          if (code.isNotEmpty) root = replace(root, f.id, f.copyWith(glassCode: code));
+        }
+      } else if (!knownGlass.contains(f.glassCode)) {
+        if (glass.isNotEmpty) root = replace(root, f.id, f.copyWith(glassCode: glass));
+      }
+    }
+    return d.copyWith(root: root);
+  }
+
   /// Bölme parçasının ölçüsünü (mm) değiştirir; fark komşu parçadan alınır/verilir.
   /// [span] bölmenin referans aralığı (LayoutResult.splitSpans).
   static WindowDesign setPartSize(WindowDesign d, String splitId, int index, double mm, double span) {

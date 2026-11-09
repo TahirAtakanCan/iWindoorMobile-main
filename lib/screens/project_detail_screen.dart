@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:windoor_core/windoor_core.dart';
 import '../services/api_service.dart';
 import '../models/project.dart';
 import '../models/catalog.dart';
@@ -14,6 +13,7 @@ import '../widgets/design_thumbnail.dart';
 import 'design_editor/design_editor_screen.dart';
 import 'project_quote_screen.dart';
 import 'project_specs_screen.dart';
+import 'templates/template_picker_screen.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   final int projectId;
@@ -243,64 +243,19 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
-  // 4. Yeni Pencere Ekle
-  void _showAddWindowDialog() {
-    final nameController = TextEditingController();
-    final widthController = TextEditingController();
-    final heightController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Yeni Poz Ekle"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameController, decoration: const InputDecoration(labelText: "Poz Adı (Örn: P-01)")),
-            const SizedBox(height: 10),
-            Row(children: [
-              Expanded(child: TextField(controller: widthController, decoration: const InputDecoration(labelText: "En (mm)"), keyboardType: TextInputType.number)),
-              const SizedBox(width: 10),
-              Expanded(child: TextField(controller: heightController, decoration: const InputDecoration(labelText: "Boy (mm)"), keyboardType: TextInputType.number)),
-            ]),
-          ],
+  // 4. Yeni Pencere Ekle — şablon seçici
+  Future<void> _showAddWindowDialog() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TemplatePickerScreen(
+          projectId: widget.projectId,
+          catalog: _catalog,
+          designApi: _designApi,
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("İptal")),
-          ElevatedButton(
-            onPressed: () async {
-              final name = nameController.text.trim();
-              final w = double.tryParse(widthController.text.replaceAll(',', '.'));
-              final h = double.tryParse(heightController.text.replaceAll(',', '.'));
-              if (name.isEmpty || w == null || h == null || w < 300 || h < 300 || w > 12000 || h > 6000) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text("Ad girin; en 300-12000, boy 300-6000 mm olmalı.")));
-                return;
-              }
-              Navigator.pop(context);
-              final cat = _catalog ?? await _designApi.catalog();
-              final series = cat.series.isNotEmpty && cat.series.first.id != 0 ? cat.series.first.id : null;
-              try {
-                final doc = await _designApi.createWindow(
-                  projectId: widget.projectId,
-                  name: name,
-                  seriesId: series,
-                  design: WindowDesign.single(w, h, seriesId: series?.toString(), glassCode: cat.defaultGlassCode),
-                );
-                if (!mounted) return;
-                await _openEditor(doc.id, doc.name);
-              } catch (e) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(this.context).showSnackBar(
-                    SnackBar(content: Text(ApiError.from(e).toString()), backgroundColor: Colors.red));
-                _refreshProject();
-              }
-            },
-            child: const Text("Oluştur"),
-          ),
-        ],
       ),
     );
+    if (mounted) _refreshProject();
   }
 
   @override
@@ -443,7 +398,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                           onTap: () => _openEditor(unit.id, unit.name),
                           onLongPress: () => _showWindowActions(unit.id, unit.name),
                           onSecondaryTap: () => _showWindowActions(unit.id, unit.name),
-                          child: DesignThumbnail(unit: unit, catalog: _catalog),
+                          child: DesignThumbnail.unit(unit, catalog: _catalog),
                         );
                       },
                     ),

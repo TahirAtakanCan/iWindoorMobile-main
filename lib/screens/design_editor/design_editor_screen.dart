@@ -4,6 +4,7 @@ import 'package:windoor_core/windoor_core.dart';
 
 import '../../drawing/design_canvas.dart';
 import '../../services/design_api.dart';
+import '../../services/template_api.dart';
 import '../../widgets/opening_icon.dart';
 import 'cut_list_sheet.dart';
 import 'design_controller.dart';
@@ -177,6 +178,65 @@ class _DesignEditorScreenState extends State<DesignEditorScreen> {
     );
   }
 
+  Future<void> _saveAsTemplate() async {
+    if (c.issues.any((i) => i.isError)) {
+      _snack(c.issues.firstWhere((i) => i.isError).message, error: true);
+      return;
+    }
+    final nameCtrl = TextEditingController(text: c.name);
+    var category = 'WINDOW';
+    final root = c.design.root;
+    if (root is SlideNode) {
+      category = 'SLIDING';
+    }
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Şablon olarak kaydet'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(labelText: 'Şablon adı', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              key: ValueKey(category),
+              initialValue: category,
+              decoration: const InputDecoration(labelText: 'Kategori', border: OutlineInputBorder()),
+              items: const [
+                DropdownMenuItem(value: 'WINDOW', child: Text('Pencere')),
+                DropdownMenuItem(value: 'DOOR', child: Text('Kapı')),
+                DropdownMenuItem(value: 'SLIDING', child: Text('Sürme')),
+                DropdownMenuItem(value: 'OTHER', child: Text('Diğer')),
+              ],
+              onChanged: (v) => setLocal(() => category = v ?? category),
+            ),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Kaydet')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final name = nameCtrl.text.trim();
+    if (name.isEmpty) {
+      _snack('Şablon adı girin.', error: true);
+      return;
+    }
+    try {
+      await TemplateApi().create(name: name, category: category, design: c.design);
+      if (!mounted) return;
+      _snack('Şablon kaydedildi.');
+    } catch (e) {
+      if (!mounted) return;
+      _snack(ApiError.from(e).toString(), error: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -235,6 +295,15 @@ class _DesignEditorScreenState extends State<DesignEditorScreen> {
                   tooltip: 'Kesim listesi / teklif',
                   icon: const Icon(Icons.list_alt),
                   onPressed: () => CutListSheet.show(context, c),
+                ),
+                PopupMenuButton<String>(
+                  tooltip: 'Diğer',
+                  onSelected: (v) {
+                    if (v == 'template') _saveAsTemplate();
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'template', child: Text('Şablon olarak kaydet')),
+                  ],
                 ),
                 Padding(
                   padding: const EdgeInsets.only(right: 8),

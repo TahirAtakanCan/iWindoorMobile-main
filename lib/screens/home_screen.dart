@@ -232,12 +232,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _deliveryTile(Project p, {required bool overdue}) {
+  Widget _deliveryTile(DeliveryLine p, {required bool overdue}) {
     return ListTile(
       dense: true,
       leading: Icon(Icons.event, color: overdue ? Colors.red : Colors.orange),
       title: Text(p.name),
-      subtitle: Text('Teslim: ${formatDate(p.deliveryDate)}'),
+      subtitle: Text([
+        if ((p.customerName ?? '').isNotEmpty) p.customerName!,
+        'Teslim: ${p.deliveryLabel}',
+      ].join(' · ')),
       trailing: StatusBadge(status: p.status, compact: true),
       onTap: () async {
         await Navigator.push(

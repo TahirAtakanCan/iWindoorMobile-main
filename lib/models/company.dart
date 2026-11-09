@@ -49,6 +49,9 @@ class CompanyProfile {
   final double installPerM2;
   final double minBillableAreaM2;
 
+  /// Keşif: montaj payı her kenar (mm).
+  final double surveyGapMm;
+
   const CompanyProfile({
     this.id,
     required this.name,
@@ -74,6 +77,7 @@ class CompanyProfile {
     this.laborPerM2 = 0,
     this.installPerM2 = 0,
     this.minBillableAreaM2 = 0,
+    this.surveyGapMm = 10,
   });
 
   factory CompanyProfile.fromJson(Map<String, dynamic> j) => CompanyProfile(
@@ -101,6 +105,7 @@ class CompanyProfile {
         laborPerM2: (j['laborPerM2'] as num?)?.toDouble() ?? (j['laborCostPerM2'] as num?)?.toDouble() ?? 0,
         installPerM2: (j['installPerM2'] as num?)?.toDouble() ?? (j['installationPerM2'] as num?)?.toDouble() ?? 0,
         minBillableAreaM2: (j['minBillableAreaM2'] as num?)?.toDouble() ?? (j['minAreaM2'] as num?)?.toDouble() ?? 0,
+        surveyGapMm: (j['surveyGapMm'] as num?)?.toDouble() ?? (j['surveyGap'] as num?)?.toDouble() ?? 10,
       );
 
   /// PUT gövdesi (id hariç).
@@ -128,6 +133,7 @@ class CompanyProfile {
         'laborPerM2': laborPerM2,
         'installPerM2': installPerM2,
         'minBillableAreaM2': minBillableAreaM2,
+        'surveyGapMm': surveyGapMm,
       };
 
   CompanyProfile copyWith({
@@ -155,6 +161,7 @@ class CompanyProfile {
     double? laborPerM2,
     double? installPerM2,
     double? minBillableAreaM2,
+    double? surveyGapMm,
   }) =>
       CompanyProfile(
         id: id ?? this.id,
@@ -181,5 +188,6 @@ class CompanyProfile {
         laborPerM2: laborPerM2 ?? this.laborPerM2,
         installPerM2: installPerM2 ?? this.installPerM2,
         minBillableAreaM2: minBillableAreaM2 ?? this.minBillableAreaM2,
+        surveyGapMm: surveyGapMm ?? this.surveyGapMm,
       );
 }

@@ -26,7 +26,9 @@ import 'production/production_screen.dart';
 import 'project_history_screen.dart';
 import 'project_quote_screen.dart';
 import 'project_specs_screen.dart';
+import 'survey/survey_screen.dart';
 import 'templates/template_picker_screen.dart';
+import 'versions/version_list_screen.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   final int projectId;
@@ -793,36 +795,73 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 onPressed: _openQuote,
               ),
               PopupMenuButton<String>(
-                onSelected: (value) {
-                  if (value == 'edit') _showEditProjectDialog(project);
-                  if (value == 'delete') _confirmDelete();
-                  if (value == 'cost') _openQuote();
-                  if (value == 'export') _exportProject(project);
-                  if (value == 'sync_prices') _confirmPriceSync();
-                  if (value == 'specs') {
-                    Navigator.push(context, MaterialPageRoute(builder: (c) => ProjectSpecsScreen(projectId: project.id)));
-                  }
-                  if (value == 'production') {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (c) => ProductionScreen(
-                          projectId: project.id,
-                          project: project,
-                          catalog: _catalog,
+                onSelected: (value) async {
+                  switch (value) {
+                    case 'edit':
+                      _showEditProjectDialog(project);
+                    case 'delete':
+                      _confirmDelete();
+                    case 'cost':
+                      _openQuote();
+                    case 'export':
+                      _exportProject(project);
+                    case 'sync_prices':
+                      _confirmPriceSync();
+                    case 'specs':
+                      Navigator.push(context, MaterialPageRoute(builder: (c) => ProjectSpecsScreen(projectId: project.id)));
+                    case 'production':
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (c) => ProductionScreen(
+                            projectId: project.id,
+                            project: project,
+                            catalog: _catalog,
+                          ),
                         ),
-                      ),
-                    );
-                  }
-                  if (value == 'cost_report') _openCostReport();
-                  if (value == 'history') {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => ProjectHistoryScreen(projectId: project.id)));
+                      );
+                    case 'cost_report':
+                      _openCostReport();
+                    case 'history':
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => ProjectHistoryScreen(projectId: project.id)));
+                    case 'versions':
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => VersionListScreen(
+                            projectId: project.id,
+                            projectName: project.name,
+                            projectApproved: project.status != ProjectStatus.quote && project.status != ProjectStatus.cancelled,
+                          ),
+                        ),
+                      );
+                      if (mounted) _refreshProject();
+                    case 'survey':
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => SurveyScreen(
+                            projectId: project.id,
+                            projectName: project.name,
+                            catalog: _catalog,
+                          ),
+                        ),
+                      );
+                      if (mounted) _refreshProject();
                   }
                 },
                 itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
                   const PopupMenuItem<String>(
                     value: 'edit',
                     child: ListTile(leading: Icon(Icons.edit), title: Text('Proje Bilgileri'), contentPadding: EdgeInsets.zero),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'versions',
+                    child: ListTile(leading: Icon(Icons.history_edu), title: Text('Sürümler'), contentPadding: EdgeInsets.zero),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'survey',
+                    child: ListTile(leading: Icon(Icons.straighten), title: Text('Keşif'), contentPadding: EdgeInsets.zero),
                   ),
                   const PopupMenuItem<String>(
                     value: 'history',

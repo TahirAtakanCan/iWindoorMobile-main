@@ -9,11 +9,18 @@ import '../../widgets/design_thumbnail.dart';
 import '../design_editor/design_editor_screen.dart';
 
 /// Yeni pencere oluştururken şablon seçimi.
+/// [popWithWindow] true ise editöre gitmez; oluşturulan [WindowDoc] ile pop eder.
 class TemplatePickerScreen extends StatefulWidget {
   final int projectId;
   final CatalogSnapshot? catalog;
   final DesignApi? designApi;
   final TemplateApi? templateApi;
+  final int initialTabIndex;
+  final double? presetWidth;
+  final double? presetHeight;
+  final String? presetName;
+  final int presetQuantity;
+  final bool popWithWindow;
 
   const TemplatePickerScreen({
     super.key,
@@ -21,6 +28,12 @@ class TemplatePickerScreen extends StatefulWidget {
     this.catalog,
     this.designApi,
     this.templateApi,
+    this.initialTabIndex = 0,
+    this.presetWidth,
+    this.presetHeight,
+    this.presetName,
+    this.presetQuantity = 1,
+    this.popWithWindow = false,
   });
 
   @override
@@ -30,7 +43,11 @@ class TemplatePickerScreen extends StatefulWidget {
 class _TemplatePickerScreenState extends State<TemplatePickerScreen> with SingleTickerProviderStateMixin {
   late final DesignApi _designApi = widget.designApi ?? DesignApi();
   late final TemplateApi _templateApi = widget.templateApi ?? TemplateApi();
-  late final TabController _tabs = TabController(length: 4, vsync: this);
+  late final TabController _tabs = TabController(
+    length: 4,
+    vsync: this,
+    initialIndex: widget.initialTabIndex.clamp(0, 3),
+  );
 
   CatalogSnapshot? _catalog;
   List<CompanyTemplate>? _company;
@@ -108,22 +125,23 @@ class _TemplatePickerScreenState extends State<TemplatePickerScreen> with Single
     return 2;
   }
 
-  Future<(double, double, int?, String)?> _askCreateForm({
+  Future<(double, double, int?, String, int)?> _askCreateForm({
     required double defaultW,
     required double defaultH,
     required String title,
     int? preferredSeriesId,
   }) async {
     final cat = _catalog ?? CatalogSnapshot.fallback;
-    final wCtrl = TextEditingController(text: defaultW.round().toString());
-    final hCtrl = TextEditingController(text: defaultH.round().toString());
-    final nameCtrl = TextEditingController(text: title);
+    final wCtrl = TextEditingController(text: (widget.presetWidth ?? defaultW).round().toString());
+    final hCtrl = TextEditingController(text: (widget.presetHeight ?? defaultH).round().toString());
+    final nameCtrl = TextEditingController(text: widget.presetName ?? title);
+    var qty = widget.presetQuantity < 1 ? 1 : widget.presetQuantity;
     int? seriesId = preferredSeriesId;
     if (seriesId == null || !cat.series.any((s) => s.id == seriesId)) {
       seriesId = cat.series.isNotEmpty && cat.series.first.id != 0 ? cat.series.first.id : null;
     }
 
-    return showModalBottomSheet<(double, double, int?, String)>(
+    return showModalBottomSheet<(double, double, int?, String, int)>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -165,6 +183,14 @@ class _TemplatePickerScreenState extends State<TemplatePickerScreen> with Single
                   ),
                 ]),
                 const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Text('Adet'),
+                    IconButton(onPressed: () => setLocal(() { if (qty > 1) qty--; }), icon: const Icon(Icons.remove_circle_outline)),
+                    Text('$qty', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    IconButton(onPressed: () => setLocal(() => qty++), icon: const Icon(Icons.add_circle_outline)),
+                  ],
+                ),
                 if (cat.series.where((s) => s.id != 0).isNotEmpty)
                   DropdownButtonFormField<int>(
                     key: ValueKey('series-$seriesId'),
@@ -192,7 +218,7 @@ class _TemplatePickerScreenState extends State<TemplatePickerScreen> with Single
                       ));
                       return;
                     }
-                    Navigator.pop(ctx, (w, h, seriesId, name));
+                    Navigator.pop(ctx, (w, h, seriesId, name, qty));
                   },
                   child: const Text('Oluştur'),
                 ),
@@ -213,7 +239,7 @@ class _TemplatePickerScreenState extends State<TemplatePickerScreen> with Single
       glass: cat.defaultGlassCode,
       panel: cat.defaultPanelCode,
     );
-    await _create(name: result.$4, design: design, seriesId: result.$3);
+    await _create(name: result.$4, design: design, seriesId: result.$3, quantity: result.$5);
   }
 
   Future<void> _pickEmpty() async {
@@ -226,7 +252,7 @@ class _TemplatePickerScreenState extends State<TemplatePickerScreen> with Single
       seriesId: result.$3?.toString(),
       glassCode: cat.defaultGlassCode,
     );
-    await _create(name: result.$4, design: design, seriesId: result.$3);
+    await _create(name: result.$4, design: design, seriesId: result.$3, quantity: result.$5);
   }
 
   Future<void> _pickCompany(CompanyTemplate t) async {
@@ -247,19 +273,29 @@ class _TemplatePickerScreenState extends State<TemplatePickerScreen> with Single
       glass: cat.defaultGlassCode,
       panel: cat.defaultPanelCode,
     );
-    await _create(name: result.$4, design: design, seriesId: result.$3);
+    await _create(name: result.$4, design: design, seriesId: result.$3, quantity: result.$5);
   }
 
-  Future<void> _create({required String name, required WindowDesign design, required int? seriesId}) async {
+  Future<void> _create({
+    required String name,
+    required WindowDesign design,
+    required int? seriesId,
+    int quantity = 1,
+  }) async {
     setState(() => _creating = true);
     try {
       final doc = await _designApi.createWindow(
         projectId: widget.projectId,
         name: name,
         seriesId: seriesId,
+        quantity: quantity,
         design: design.copyWith(seriesId: seriesId?.toString() ?? design.seriesId),
       );
       if (!mounted) return;
+      if (widget.popWithWindow) {
+        Navigator.pop(context, doc);
+        return;
+      }
       await Navigator.pushReplacement(
         context,
         MaterialPageRoute(

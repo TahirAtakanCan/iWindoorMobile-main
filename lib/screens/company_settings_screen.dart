@@ -38,6 +38,7 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
   final _labor = TextEditingController();
   final _install = TextEditingController();
   final _minArea = TextEditingController();
+  final _surveyGap = TextEditingController();
 
   PricingMode _pricingMode = PricingMode.costPlus;
   bool _loading = true;
@@ -76,6 +77,7 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
     _labor.dispose();
     _install.dispose();
     _minArea.dispose();
+    _surveyGap.dispose();
     super.dispose();
   }
 
@@ -128,6 +130,7 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
     _labor.text = _num(c.laborPerM2);
     _install.text = _num(c.installPerM2);
     _minArea.text = _num(c.minBillableAreaM2);
+    _surveyGap.text = _num(c.surveyGapMm);
   }
 
   static String _num(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
@@ -160,6 +163,7 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
       laborPerM2: double.tryParse(_labor.text.replaceAll(',', '.')) ?? 0,
       installPerM2: double.tryParse(_install.text.replaceAll(',', '.')) ?? 0,
       minBillableAreaM2: double.tryParse(_minArea.text.replaceAll(',', '.')) ?? 0,
+      surveyGapMm: double.tryParse(_surveyGap.text.replaceAll(',', '.')) ?? 10,
     );
     try {
       final saved = await _api.updateCompany(profile);
@@ -329,6 +333,8 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
                           ),
                         ]),
                         _field(_minOffcut, 'Artık sınırı (mm)', enabled: !_readOnly,
+                            keyboard: TextInputType.number, validator: _mmValidator),
+                        _field(_surveyGap, 'Keşif montaj payı (her kenar, mm)', enabled: !_readOnly,
                             keyboard: TextInputType.number, validator: _mmValidator),
                         const SizedBox(height: 8),
                         Text('Cam tedarikçisi', style: Theme.of(context).textTheme.titleMedium),

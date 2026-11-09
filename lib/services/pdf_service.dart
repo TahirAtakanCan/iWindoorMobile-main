@@ -9,7 +9,9 @@ import 'package:windoor_core/windoor_core.dart';
 
 import '../drawing/glass_look.dart';
 import '../models/catalog.dart';
+import '../models/company.dart';
 import '../models/project_quote.dart';
+import '../models/quote_version.dart';
 import '../pdf/pdf_window_drawing.dart';
 import '../utils/cost_breakdown.dart';
 import '../utils/design_summary.dart';
@@ -35,6 +37,52 @@ SeriesInfo seriesForWindow(CatalogSnapshot catalog, QuoteWindow w) {
     }
   }
   return catalog.seriesFor(w.design.seriesId);
+}
+
+/// Snapshot → ProjectQuote (PDF için).
+ProjectQuote projectQuoteFromSnapshot(
+  QuoteVersionSnapshot snap, {
+  CompanyProfile? companyFallback,
+  String? projectNameFallback,
+}) {
+  final company = snap.company != null
+      ? CompanyProfile.fromJson(snap.company!)
+      : (companyFallback ?? const CompanyProfile(name: ''));
+  final project = snap.project != null
+      ? QuoteProjectInfo.fromJson(snap.project!)
+      : QuoteProjectInfo(id: 0, name: projectNameFallback ?? 'Sürüm ${snap.versionNo}');
+
+  return ProjectQuote(
+    company: company,
+    project: project,
+    windows: [
+      for (final w in snap.windows)
+        QuoteWindow(
+          windowId: w.windowId ?? 0,
+          name: w.name,
+          quantity: w.quantity,
+          width: w.width,
+          height: w.height,
+          design: w.design,
+          unitPrice: w.unitPrice,
+          lineTotal: w.lineTotal > 0 ? w.lineTotal : w.unitPrice * w.quantity,
+          seriesName: w.seriesName ??
+              snap.seriesNames[w.design.seriesId ?? ''] ??
+              (w.design.seriesId != null ? snap.seriesNames['${w.design.seriesId}'] : null),
+          saleUnitPrice: w.unitPrice,
+        ),
+    ],
+    materials: const [],
+    extras: snap.extras,
+    subtotal: snap.subtotal,
+    discountPct: snap.discountPct,
+    discountAmount: snap.discountAmount,
+    netTotal: snap.netTotal,
+    vatRate: snap.vatRate,
+    vatAmount: snap.vatAmount,
+    grandTotal: snap.grandTotal,
+    currency: snap.currency,
+  );
 }
 
 String? _colorTitle(CatalogSnapshot catalog, String colorCode) {
@@ -115,6 +163,61 @@ class PdfService {
     } catch (e, st) {
       debugPrint('PDF paylaşım hatası: $e\n$st');
       rethrow;
+    }
+  }
+
+  /// Sürüm snapshot'ından müşteri teklif PDF'i.
+  Future<void> shareOrPrintSnapshotQuote(
+    QuoteVersionSnapshot snap, {
+    required CatalogSnapshot catalog,
+    CompanyProfile? companyFallback,
+    String? projectNameFallback,
+  }) async {
+    final q = projectQuoteFromSnapshot(
+      snap,
+      companyFallback: companyFallback,
+      projectNameFallback: projectNameFallback,
+    );
+    await shareOrPrintQuotePdf(q, catalog);
+  }
+
+  Future<void> shareSurveyListPdf({
+    required String projectName,
+    required List<({String room, String type, String opening, int qty, String? note})> rows,
+  }) async {
+    final font = await PdfGoogleFonts.robotoRegular();
+    final bold = await PdfGoogleFonts.robotoBold();
+    final doc = pw.Document(theme: pw.ThemeData.withFont(base: font, bold: bold));
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(36),
+        build: (_) => [
+          pw.Text('KEŞİF LİSTESİ', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 4),
+          pw.Text(projectName, style: const pw.TextStyle(fontSize: 11)),
+          pw.SizedBox(height: 12),
+          pw.TableHelper.fromTextArray(
+            headers: const ['Oda', 'Tip', 'Boşluk (mm)', 'Adet', 'Not'],
+            data: [
+              for (final r in rows) [r.room, r.type, r.opening, '${r.qty}', r.note ?? ''],
+            ],
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey700),
+            cellStyle: const pw.TextStyle(fontSize: 9),
+            border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.3),
+          ),
+          pw.SizedBox(height: 20),
+          pw.Text('Ölçü teyidi / müşteri imza: ________________________', style: const pw.TextStyle(fontSize: 10)),
+        ],
+      ),
+    );
+    final bytes = await doc.save();
+    final name = 'Kesif_${_safeFile(projectName)}.pdf';
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      await Printing.sharePdf(bytes: bytes, filename: name);
+    } else {
+      await Printing.layoutPdf(onLayout: (_) async => bytes, name: name);
     }
   }
 

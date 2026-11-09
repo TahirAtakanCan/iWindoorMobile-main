@@ -1,5 +1,39 @@
-import 'project.dart';
 import '../utils/status.dart';
+import '../utils/format.dart';
+
+/// Dashboard teslim satırı (hafif; Project.fromJson değil).
+class DeliveryLine {
+  final int id;
+  final String name;
+  final String? customerName;
+  final DateTime? deliveryDate;
+  final ProjectStatus status;
+
+  const DeliveryLine({
+    required this.id,
+    required this.name,
+    this.customerName,
+    this.deliveryDate,
+    this.status = ProjectStatus.quote,
+  });
+
+  factory DeliveryLine.fromJson(Map<String, dynamic> j) {
+    DateTime? parseDate(Object? v) {
+      if (v == null) return null;
+      return DateTime.tryParse('$v');
+    }
+
+    return DeliveryLine(
+      id: (j['id'] as num).toInt(),
+      name: j['name'] as String? ?? '',
+      customerName: j['customerName'] as String?,
+      deliveryDate: parseDate(j['deliveryDate']),
+      status: ProjectStatus.fromApi(j['status']),
+    );
+  }
+
+  String get deliveryLabel => formatDate(deliveryDate);
+}
 
 class DashboardSummary {
   final int quoteCount;
@@ -7,8 +41,8 @@ class DashboardSummary {
   final int installationCount;
   final double totalReceivable;
   final double approvedThisMonth;
-  final List<Project> upcomingDeliveries;
-  final List<Project> overdueDeliveries;
+  final List<DeliveryLine> upcomingDeliveries;
+  final List<DeliveryLine> overdueDeliveries;
   final Map<ProjectStatus, int> statusCounts;
 
   const DashboardSummary({
@@ -23,13 +57,13 @@ class DashboardSummary {
   });
 
   factory DashboardSummary.fromJson(Map<String, dynamic> j) {
-    List<Project> parseProjects(Object? raw) {
+    List<DeliveryLine> parseDeliveries(Object? raw) {
       if (raw is! List) return const [];
-      return [for (final e in raw) Project.fromJson(Map<String, dynamic>.from(e as Map))];
+      return [for (final e in raw) DeliveryLine.fromJson(Map<String, dynamic>.from(e as Map))];
     }
 
     final counts = <ProjectStatus, int>{};
-    final rawCounts = j['statusCounts'] ?? j['counts'];
+    final rawCounts = j['countsByStatus'] ?? j['statusCounts'] ?? j['counts'];
     if (rawCounts is Map) {
       for (final e in rawCounts.entries) {
         counts[ProjectStatus.fromApi(e.key)] = (e.value as num?)?.toInt() ?? 0;
@@ -49,15 +83,16 @@ class DashboardSummary {
           (j['inInstallation'] as num?)?.toInt() ??
           counts[ProjectStatus.installation] ??
           0,
-      totalReceivable: (j['totalReceivable'] as num?)?.toDouble() ??
+      totalReceivable: (j['receivables'] as num?)?.toDouble() ??
+          (j['totalReceivable'] as num?)?.toDouble() ??
           (j['receivableTotal'] as num?)?.toDouble() ??
           (j['totalBalance'] as num?)?.toDouble() ??
           0,
       approvedThisMonth: (j['approvedThisMonth'] as num?)?.toDouble() ??
           (j['monthApprovedTotal'] as num?)?.toDouble() ??
           0,
-      upcomingDeliveries: parseProjects(j['upcomingDeliveries'] ?? j['upcoming']),
-      overdueDeliveries: parseProjects(j['overdueDeliveries'] ?? j['overdue']),
+      upcomingDeliveries: parseDeliveries(j['upcomingDeliveries'] ?? j['upcoming']),
+      overdueDeliveries: parseDeliveries(j['overdueDeliveries'] ?? j['overdue']),
       statusCounts: counts,
     );
   }

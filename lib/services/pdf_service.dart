@@ -180,7 +180,7 @@ class PdfService {
     String currency,
   ) {
     final bom = BomLine.aggregate(layout.bom);
-    final ruleIssues = checkDesign(layout, geometry);
+    final ruleIssues = checkDesign(layout, geometry, w.design);
     return [
       pw.Text(w.name, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
       pw.SizedBox(height: 4),

@@ -462,6 +462,12 @@ class _Toolbox extends StatelessWidget {
       _tool(context, 'Yatay ikiye böl', const OpeningIcon.split(SplitDir.h, 2), enabled ? () => c.split(SplitDir.h, 2) : null),
       _tool(context, 'Yatay üçe böl', const OpeningIcon.split(SplitDir.h, 3), enabled ? () => c.split(SplitDir.h, 3) : null),
       _tool(context, 'Bölmeyi kaldır', const OpeningIcon.unsplit(), c.canUnsplit ? c.unsplit : null),
+      _tool(
+        context,
+        'Çift kanat (orta kayıtsız)',
+        const Icon(Icons.view_column_outlined, size: 22),
+        enabled ? c.makeDoubleSash : null,
+      ),
       for (final o in OpeningChoice.values)
         _tool(context, OpeningIcon.label(o), OpeningIcon.opening(o), enabled ? () => c.setOpening(o) : null,
             selected: current == o),
@@ -472,11 +478,11 @@ class _Toolbox extends StatelessWidget {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('BÖLME', style: Theme.of(context).textTheme.labelSmall),
           const SizedBox(height: 6),
-          Wrap(spacing: 6, runSpacing: 6, children: tools.sublist(0, 5)),
+          Wrap(spacing: 6, runSpacing: 6, children: tools.sublist(0, 6)),
           const SizedBox(height: 14),
           Text('AÇILIM', style: Theme.of(context).textTheme.labelSmall),
           const SizedBox(height: 6),
-          Wrap(spacing: 6, runSpacing: 6, children: tools.sublist(5)),
+          Wrap(spacing: 6, runSpacing: 6, children: tools.sublist(6)),
         ]),
       );
     }
@@ -486,7 +492,7 @@ class _Toolbox extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         itemCount: tools.length,
-        separatorBuilder: (_, i) => i == 4 ? const VerticalDivider(width: 14) : const SizedBox(width: 6),
+        separatorBuilder: (_, i) => i == 5 ? const VerticalDivider(width: 14) : const SizedBox(width: 6),
         itemBuilder: (_, i) => tools[i],
       ),
     );

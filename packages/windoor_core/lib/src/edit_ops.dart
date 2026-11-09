@@ -6,11 +6,12 @@ import 'model.dart';
 /// Editördeki açılım seçenekleri (sabit + kanat tipleri + sürme).
 enum OpeningChoice { fixed, turnLeft, turnRight, tilt, tiltTurnLeft, tiltTurnRight, slide }
 
-/// Düzenleme sonucu: yeni belge + seçilecek düğüm.
+/// Düzenleme sonucu: yeni belge + seçilecek düğüm (+ isteğe bağlı hata).
 class EditResult {
   final WindowDesign design;
   final String? selectedId;
-  const EditResult(this.design, this.selectedId);
+  final String? error;
+  const EditResult(this.design, this.selectedId, {this.error});
 }
 
 class DesignOps {
@@ -115,8 +116,21 @@ class DesignOps {
   static DesignNode replace(DesignNode n, String id, DesignNode r) {
     if (n.id == id) return r;
     return switch (n) {
-      SplitNode s => SplitNode(id: s.id, dir: s.dir, sizes: s.sizes, children: [for (final c in s.children) replace(c, id, r)]),
-      SashNode s => SashNode(id: s.id, opening: s.opening, child: replace(s.child, id, r)),
+      SplitNode s => SplitNode(
+          id: s.id,
+          dir: s.dir,
+          sizes: s.sizes,
+          joint: s.joint,
+          children: [for (final c in s.children) replace(c, id, r)],
+        ),
+      SashNode s => SashNode(
+          id: s.id,
+          opening: s.opening,
+          kind: s.kind,
+          passive: s.passive,
+          outward: s.outward,
+          child: replace(s.child, id, r),
+        ),
       SlideNode s => SlideNode(id: s.id, left: replace(s.left, id, r), right: replace(s.right, id, r)),
       FillNode f => f,
     };
@@ -156,7 +170,12 @@ class DesignOps {
         final ids = _nextIds(d.root, 2);
         node = SlideNode(id: ids[0], left: leaf, right: leaf.copyWith(id: ids[1]));
       default:
-        node = SashNode(id: nextId(d.root), opening: OpeningType.values.byName(choice.name), child: leaf);
+        final opening = OpeningType.values.byName(choice.name);
+        if (slot is SashNode) {
+          node = slot.copyWith(opening: opening, child: leaf);
+        } else {
+          node = SashNode(id: nextId(d.root), opening: opening, child: leaf);
+        }
     }
     return EditResult(d.copyWith(root: replace(d.root, slot.id, node)), leaf.id);
   }
@@ -234,7 +253,7 @@ class DesignOps {
     cur[index] = target;
     cur[j] -= delta;
     final sizes = [for (final v in cur) (v * 10).roundToDouble() / 10];
-    final next = SplitNode(id: sp.id, dir: sp.dir, sizes: sizes, children: sp.children);
+    final next = sp.copyWith(sizes: sizes);
     return d.copyWith(root: replace(d.root, splitId, next));
   }
 
@@ -243,4 +262,88 @@ class DesignOps {
     final total = sp.sizes.fold<double>(0, (a, b) => a + b);
     return [for (final v in sp.sizes) span * v / total];
   }
+
+  /// Seçili cam/kanatı orta kayıtsız (adaptör) çift kanata çevirir.
+  static EditResult makeDoubleSash(WindowDesign d, String fillId) {
+    final leaf = find(d.root, fillId);
+    if (leaf is! FillNode) return EditResult(d, fillId);
+    final slot = slotOf(d.root, fillId);
+    final ids = _nextIds(d.root, 5);
+    final leftFill = leaf.copyWith(id: ids[3]);
+    final rightFill = leaf.copyWith(id: ids[4]);
+    final node = SplitNode(
+      id: ids[0],
+      dir: SplitDir.v,
+      sizes: const [1, 1],
+      joint: JointKind.adapter,
+      children: [
+        SashNode(id: ids[1], opening: OpeningType.turnLeft, passive: true, child: leftFill),
+        SashNode(id: ids[2], opening: OpeningType.tiltTurnRight, child: rightFill),
+      ],
+    );
+    return EditResult(d.copyWith(root: replace(d.root, slot.id, node)), leftFill.id);
+  }
+
+  /// Adaptör birleşimine geçiş için hata metni; geçerliyse null.
+  static String? jointError(SplitNode sp, JointKind joint) {
+    if (joint != JointKind.adapter) return null;
+    if (sp.dir != SplitDir.v || sp.children.length != 2) {
+      return 'Orta kayıtsız birleşim yalnızca dikey iki kanatlı bölmede kullanılabilir.';
+    }
+    if (sp.children.any((c) => c is! SashNode)) {
+      return 'Orta kayıtsız birleşimde her iki yan da kanat olmalıdır.';
+    }
+    return null;
+  }
+
+  /// Bölme birleşimini ayarlar. Geçersiz adaptörde [EditResult.error] dolu döner.
+  static EditResult setJoint(WindowDesign d, String splitId, JointKind joint) {
+    final sp = find(d.root, splitId);
+    if (sp is! SplitNode) return EditResult(d, splitId);
+    final err = jointError(sp, joint);
+    if (err != null) return EditResult(d, splitId, error: err);
+    var children = sp.children;
+    if (joint == JointKind.adapter) {
+      final sashes = children.cast<SashNode>();
+      final passiveCount = sashes.where((s) => s.passive).length;
+      if (passiveCount == 0) {
+        children = [sashes[0].copyWith(passive: true), sashes[1].copyWith(passive: false)];
+      } else if (passiveCount > 1) {
+        return EditResult(d, splitId, error: 'Orta kayıtsız birleşimde tam bir pasif kanat olmalıdır.');
+      }
+    }
+    final next = sp.copyWith(joint: joint, children: children);
+    return EditResult(d.copyWith(root: replace(d.root, splitId, next)), splitId);
+  }
+
+  static EditResult setSashKind(WindowDesign d, String sashId, SashKind kind) {
+    final sash = find(d.root, sashId);
+    if (sash is! SashNode) return EditResult(d, sashId);
+    return EditResult(d.copyWith(root: replace(d.root, sashId, sash.copyWith(kind: kind))), sashId);
+  }
+
+  /// Adaptör bölmesinde bu kanadı pasif yapar; diğerini aktifleştirir.
+  static EditResult setPassive(WindowDesign d, String sashId) {
+    final sash = find(d.root, sashId);
+    if (sash is! SashNode) return EditResult(d, sashId);
+    final parent = parentOf(d.root, sashId);
+    if (parent is SplitNode && parent.joint == JointKind.adapter && parent.children.length == 2) {
+      var root = d.root;
+      for (final c in parent.children) {
+        if (c is! SashNode) continue;
+        root = replace(root, c.id, c.copyWith(passive: c.id == sashId));
+      }
+      return EditResult(d.copyWith(root: root), sashId);
+    }
+    return EditResult(d.copyWith(root: replace(d.root, sashId, sash.copyWith(passive: !sash.passive))), sashId);
+  }
+
+  static EditResult setOutward(WindowDesign d, String sashId, bool outward) {
+    final sash = find(d.root, sashId);
+    if (sash is! SashNode) return EditResult(d, sashId);
+    return EditResult(d.copyWith(root: replace(d.root, sashId, sash.copyWith(outward: outward))), sashId);
+  }
+
+  static EditResult setBottom(WindowDesign d, BottomKind bottom) =>
+      EditResult(d.copyWith(bottom: bottom), null);
 }

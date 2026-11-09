@@ -89,14 +89,25 @@ class DesignPainter extends CustomPainter {
         case GlassPrim g:
           _glass(canvas, g, hair);
         case PolylinePrim l:
-          final path = Path()..moveTo(l.pts.first.x, l.pts.first.y);
-          for (final q in l.pts.skip(1)) {
-            path.lineTo(q.x, q.y);
+          final paint = _stroke(const Color(0xFF20303A), 1.3 * hair)..strokeJoin = StrokeJoin.round;
+          if (l.dashed) {
+            _drawDashedPolyline(canvas, l.pts, paint, 14 / t.k, 8 / t.k);
+          } else {
+            final path = Path()..moveTo(l.pts.first.x, l.pts.first.y);
+            for (final q in l.pts.skip(1)) {
+              path.lineTo(q.x, q.y);
+            }
+            canvas.drawPath(path, paint);
           }
-          canvas.drawPath(path, _stroke(const Color(0xFF20303A), 1.3 * hair)..strokeJoin = StrokeJoin.round);
         case HandlePrim h:
           for (final (box, radius) in [(h.base, 6.0), (h.lever, 7.0)]) {
             final rr = RRect.fromLTRBR(box.l, box.t, box.r, box.b, Radius.circular(radius));
+            canvas.drawRRect(rr, Paint()..color = color.hardware);
+            canvas.drawRRect(rr, _stroke(const Color(0xFF3A4146), hair));
+          }
+          if (h.lock != null) {
+            final lock = h.lock!;
+            final rr = RRect.fromLTRBR(lock.l, lock.t, lock.r, lock.b, Radius.circular(lock.w / 2));
             canvas.drawRRect(rr, Paint()..color = color.hardware);
             canvas.drawRRect(rr, _stroke(const Color(0xFF3A4146), hair));
           }
@@ -154,15 +165,44 @@ class DesignPainter extends CustomPainter {
 
   void _bar(Canvas c, BarRect b, double hair) {
     final r = Rect.fromLTRB(b.box.l, b.box.t, b.box.r, b.box.b);
-    c.drawRect(r, Paint()..color = color.fill);
-    if (b.dir != null) {
-      final v = b.dir == SplitDir.v;
-      final shadow = v
-          ? Rect.fromLTRB(r.left + r.width * .62, r.top, r.right, r.bottom)
-          : Rect.fromLTRB(r.left, r.top + r.height * .62, r.right, r.bottom);
-      c.drawRect(shadow, Paint()..color = Colors.black.withValues(alpha: .08));
+    if (b.metallic) {
+      c.drawRect(
+        r,
+        Paint()
+          ..shader = const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFB0B6BC), Color(0xFF7A828A), Color(0xFF9AA1A8)],
+          ).createShader(r),
+      );
+    } else {
+      c.drawRect(r, Paint()..color = color.fill);
+      if (b.dir != null) {
+        final v = b.dir == SplitDir.v;
+        final shadow = v
+            ? Rect.fromLTRB(r.left + r.width * .62, r.top, r.right, r.bottom)
+            : Rect.fromLTRB(r.left, r.top + r.height * .62, r.right, r.bottom);
+        c.drawRect(shadow, Paint()..color = Colors.black.withValues(alpha: .08));
+      }
     }
     c.drawRect(r, _stroke(color.stroke, hair));
+  }
+
+  void _drawDashedPolyline(Canvas c, List<Pt> pts, Paint paint, double dash, double gap) {
+    if (pts.length < 2) return;
+    for (var i = 0; i < pts.length - 1; i++) {
+      final a = Offset(pts[i].x, pts[i].y);
+      final b = Offset(pts[i + 1].x, pts[i + 1].y);
+      final len = (b - a).distance;
+      if (len <= 0) continue;
+      final dir = (b - a) / len;
+      var d = 0.0;
+      while (d < len) {
+        final next = math.min(d + dash, len);
+        c.drawLine(a + dir * d, a + dir * next, paint);
+        d += dash + gap;
+      }
+    }
   }
 
   // --- cam: degrade + çapraz parlama şeritleri (clip ile) ---

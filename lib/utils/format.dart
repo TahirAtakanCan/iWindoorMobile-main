@@ -51,13 +51,19 @@ String hardwareKindTr(String? kind) => switch ((kind ?? '').toUpperCase()) {
       'TILT' => 'Vasistas',
       'TILT_TURN' => 'Çift açılım',
       'SLIDE' => 'Sürme',
+      'PASSIVE' => 'Pasif kanat',
+      'DOOR' => 'Kapı',
+      'DOOR_PASSIVE' => 'Pasif kapı kanadı',
       _ => kind ?? '—',
     };
 
 String profileRoleTr(String? role) => switch ((role ?? '').toUpperCase()) {
       'FRAME' => 'Kasa',
+      'THRESHOLD' => 'Eşik',
       'SASH' => 'Kanat',
-      'MULLION' => 'Orta kayıt',
+      'DOOR_SASH' => 'Kapı kanadı',
       'SLIDE_SASH' => 'Sürme kanat',
+      'MULLION' => 'Orta kayıt',
+      'ADAPTER' => 'Adaptör',
       _ => role ?? 'Profil',
     };

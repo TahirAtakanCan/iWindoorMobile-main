@@ -61,7 +61,23 @@ class PropertiesPanel extends StatelessWidget {
                     onSelected: (_) => c.setColor(col.code),
                   ),
               ]),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<BottomKind>(
+                key: ValueKey(c.design.bottom),
+                initialValue: c.design.bottom,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Alt profil', border: OutlineInputBorder(), isDense: true),
+                items: const [
+                  DropdownMenuItem(value: BottomKind.frame, child: Text('Kasa')),
+                  DropdownMenuItem(value: BottomKind.threshold, child: Text('Eşik')),
+                ],
+                onChanged: (v) {
+                  if (v != null) c.setBottom(v);
+                },
+              ),
             ]),
+            if (c.selectedSash != null) _SashProps(c: c),
+            if (c.selectedSplitIsAdapterCandidate) _JointProps(c: c),
             if (fill == null)
               const Padding(
                 padding: EdgeInsets.only(top: 16),
@@ -108,6 +124,86 @@ class PropertiesPanel extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _SashProps extends StatelessWidget {
+  final DesignController c;
+  const _SashProps({required this.c});
+
+  @override
+  Widget build(BuildContext context) {
+    final sash = c.selectedSash!;
+    final inAdapter = c.selectedSplit?.joint == JointKind.adapter;
+    return _Section(title: 'Kanat', children: [
+      DropdownButtonFormField<SashKind>(
+        key: ValueKey('kind-${sash.id}-${sash.kind}'),
+        initialValue: sash.kind,
+        isExpanded: true,
+        decoration: const InputDecoration(labelText: 'Kanat tipi', border: OutlineInputBorder(), isDense: true),
+        items: const [
+          DropdownMenuItem(value: SashKind.window, child: Text('Pencere')),
+          DropdownMenuItem(value: SashKind.door, child: Text('Kapı')),
+        ],
+        onChanged: (v) {
+          if (v != null) c.setSashKind(v);
+        },
+      ),
+      const SizedBox(height: 10),
+      DropdownButtonFormField<bool>(
+        key: ValueKey('out-${sash.id}-${sash.outward}'),
+        initialValue: sash.outward,
+        isExpanded: true,
+        decoration: const InputDecoration(labelText: 'Açılım', border: OutlineInputBorder(), isDense: true),
+        items: const [
+          DropdownMenuItem(value: false, child: Text('İçe')),
+          DropdownMenuItem(value: true, child: Text('Dışa')),
+        ],
+        onChanged: (v) {
+          if (v != null) c.setOutward(v);
+        },
+      ),
+      if (inAdapter) ...[
+        const SizedBox(height: 6),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Pasif kanat'),
+          value: sash.passive,
+          onChanged: (v) {
+            if (v && !sash.passive) c.setPassive();
+          },
+        ),
+      ],
+    ]);
+  }
+}
+
+class _JointProps extends StatelessWidget {
+  final DesignController c;
+  const _JointProps({required this.c});
+
+  @override
+  Widget build(BuildContext context) {
+    final sp = c.selectedSplit!;
+    return _Section(title: 'Birleşim', children: [
+      DropdownButtonFormField<JointKind>(
+        key: ValueKey('joint-${sp.id}-${sp.joint}'),
+        initialValue: sp.joint,
+        isExpanded: true,
+        decoration: const InputDecoration(labelText: 'Birleşim', border: OutlineInputBorder(), isDense: true),
+        items: const [
+          DropdownMenuItem(value: JointKind.mullion, child: Text('Orta kayıt')),
+          DropdownMenuItem(value: JointKind.adapter, child: Text('Orta kayıtsız (adaptör)')),
+        ],
+        onChanged: (v) {
+          if (v == null) return;
+          final err = c.setJoint(v);
+          if (err != null && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+          }
+        },
+      ),
+    ]);
   }
 }
 

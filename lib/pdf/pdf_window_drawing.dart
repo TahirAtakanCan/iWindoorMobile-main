@@ -213,13 +213,31 @@ void _paintGeometry(
         canvas.setStrokeColor(const PdfColor(0.125, 0.188, 0.227));
         canvas.setLineWidth(1.1);
         canvas.setLineJoin(PdfLineJoin.round);
-        canvas.moveTo(xf.x(l.pts.first.x), xf.y(l.pts.first.y));
-        for (final q in l.pts.skip(1)) {
-          canvas.lineTo(xf.x(q.x), xf.y(q.y));
+        if (l.dashed) {
+          for (var i = 0; i < l.pts.length - 1; i++) {
+            final a = l.pts[i], b = l.pts[i + 1];
+            final dx = b.x - a.x, dy = b.y - a.y;
+            final len = math.sqrt(dx * dx + dy * dy);
+            if (len <= 0) continue;
+            const dash = 12.0, gap = 7.0;
+            var d = 0.0;
+            while (d < len) {
+              final n = math.min(d + dash, len);
+              canvas.moveTo(xf.x(a.x + dx * d / len), xf.y(a.y + dy * d / len));
+              canvas.lineTo(xf.x(a.x + dx * n / len), xf.y(a.y + dy * n / len));
+              canvas.strokePath();
+              d += dash + gap;
+            }
+          }
+        } else {
+          canvas.moveTo(xf.x(l.pts.first.x), xf.y(l.pts.first.y));
+          for (final q in l.pts.skip(1)) {
+            canvas.lineTo(xf.x(q.x), xf.y(q.y));
+          }
+          canvas.strokePath();
         }
-        canvas.strokePath();
       case HandlePrim h:
-        for (final box in [h.base, h.lever]) {
+        for (final box in [h.base, h.lever, if (h.lock != null) h.lock!]) {
           canvas.setFillColor(hardware);
           canvas.drawRect(xf.x(box.l), xf.y(box.b), (box.r - box.l) * xf.k, (box.b - box.t) * xf.k);
           canvas.fillPath();
@@ -271,10 +289,10 @@ void _profile(PdfGraphics c, _Xform xf, ProfilePoly p, PdfColor fill, PdfColor s
 void _bar(PdfGraphics c, _Xform xf, BarRect b, PdfColor fill, PdfColor stroke, double hair) {
   final l = xf.x(b.box.l), bottom = xf.y(b.box.b);
   final w = (b.box.r - b.box.l) * xf.k, h = (b.box.b - b.box.t) * xf.k;
-  c.setFillColor(fill);
+  c.setFillColor(b.metallic ? const PdfColor(0.55, 0.58, 0.62) : fill);
   c.drawRect(l, bottom, w, h);
   c.fillPath();
-  if (b.dir != null) {
+  if (!b.metallic && b.dir != null) {
     final v = b.dir == SplitDir.v;
     if (v) {
       c.setFillColor(_mixBlack(fill, .08));

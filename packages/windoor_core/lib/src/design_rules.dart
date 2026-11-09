@@ -13,7 +13,8 @@ class RuleIssue {
 }
 
 /// [layout] üzerindeki kanat ve sabit camları [s] limitleriyle karşılaştırır.
-List<RuleIssue> checkDesign(LayoutResult layout, SeriesGeometry s) {
+/// [design] verilirse adaptör bölme yapı kuralları da kontrol edilir.
+List<RuleIssue> checkDesign(LayoutResult layout, SeriesGeometry s, [WindowDesign? design]) {
   final issues = <RuleIssue>[];
   final sashFillIds = <String>{};
 
@@ -31,33 +32,68 @@ List<RuleIssue> checkDesign(LayoutResult layout, SeriesGeometry s) {
           false,
         ));
       }
-    } else {
-      if (w < s.minSashWidth) {
+      continue;
+    }
+
+    if (sash.kind == SashKind.door) {
+      if (w < s.minDoorSashWidth) {
         issues.add(RuleIssue(
           ids,
-          'Kanat genişliği ${w.round()} mm; bu seride en az ${s.minSashWidth.round()} mm.',
+          'Kapı kanadı genişliği ${w.round()} mm; bu seride en az ${s.minDoorSashWidth.round()} mm.',
           false,
         ));
-      } else if (w > s.maxSashWidth) {
+      } else if (w > s.maxDoorSashWidth) {
         issues.add(RuleIssue(
           ids,
-          'Kanat genişliği ${w.round()} mm; bu seride en fazla ${s.maxSashWidth.round()} mm.',
-          false,
-        ));
-      }
-      if (h < s.minSashHeight) {
-        issues.add(RuleIssue(
-          ids,
-          'Kanat yüksekliği ${h.round()} mm; bu seride en az ${s.minSashHeight.round()} mm.',
-          false,
-        ));
-      } else if (h > s.maxSashHeight) {
-        issues.add(RuleIssue(
-          ids,
-          'Kanat yüksekliği ${h.round()} mm; bu seride en fazla ${s.maxSashHeight.round()} mm.',
+          'Kapı kanadı genişliği ${w.round()} mm; bu seride en fazla ${s.maxDoorSashWidth.round()} mm.',
           false,
         ));
       }
+      if (h < s.minDoorSashHeight) {
+        issues.add(RuleIssue(
+          ids,
+          'Kapı kanadı yüksekliği ${h.round()} mm; bu seride en az ${s.minDoorSashHeight.round()} mm.',
+          false,
+        ));
+      } else if (h > s.maxDoorSashHeight) {
+        issues.add(RuleIssue(
+          ids,
+          'Kapı kanadı yüksekliği ${h.round()} mm; bu seride en fazla ${s.maxDoorSashHeight.round()} mm.',
+          false,
+        ));
+      }
+      final o = sash.opening;
+      if (o == OpeningType.tilt || o == OpeningType.tiltTurnLeft || o == OpeningType.tiltTurnRight) {
+        issues.add(RuleIssue(ids, 'Kapı kanadı vasistas açılamaz.', true));
+      }
+      continue;
+    }
+
+    if (w < s.minSashWidth) {
+      issues.add(RuleIssue(
+        ids,
+        'Kanat genişliği ${w.round()} mm; bu seride en az ${s.minSashWidth.round()} mm.',
+        false,
+      ));
+    } else if (w > s.maxSashWidth) {
+      issues.add(RuleIssue(
+        ids,
+        'Kanat genişliği ${w.round()} mm; bu seride en fazla ${s.maxSashWidth.round()} mm.',
+        false,
+      ));
+    }
+    if (h < s.minSashHeight) {
+      issues.add(RuleIssue(
+        ids,
+        'Kanat yüksekliği ${h.round()} mm; bu seride en az ${s.minSashHeight.round()} mm.',
+        false,
+      ));
+    } else if (h > s.maxSashHeight) {
+      issues.add(RuleIssue(
+        ids,
+        'Kanat yüksekliği ${h.round()} mm; bu seride en fazla ${s.maxSashHeight.round()} mm.',
+        false,
+      ));
     }
   }
 
@@ -82,5 +118,37 @@ List<RuleIssue> checkDesign(LayoutResult layout, SeriesGeometry s) {
     }
   }
 
+  if (design != null) {
+    _checkAdapterSplits(design.root, issues);
+  }
+
   return issues;
+}
+
+void _checkAdapterSplits(DesignNode node, List<RuleIssue> issues) {
+  switch (node) {
+    case SplitNode s:
+      if (s.joint == JointKind.adapter) {
+        final ids = [s.id, for (final c in s.children) c.id];
+        final sashes = s.children.whereType<SashNode>().toList();
+        if (s.children.length != 2 || sashes.length != 2) {
+          issues.add(RuleIssue(ids, 'Orta kayıtsız birleşimde her iki yan da kanat olmalıdır.', true));
+        } else {
+          final passive = sashes.where((x) => x.passive).length;
+          if (passive != 1) {
+            issues.add(RuleIssue(ids, 'Orta kayıtsız birleşimde tam bir pasif kanat olmalıdır.', true));
+          }
+        }
+      }
+      for (final c in s.children) {
+        _checkAdapterSplits(c, issues);
+      }
+    case SashNode s:
+      _checkAdapterSplits(s.child, issues);
+    case SlideNode s:
+      _checkAdapterSplits(s.left, issues);
+      _checkAdapterSplits(s.right, issues);
+    case FillNode _:
+      break;
+  }
 }

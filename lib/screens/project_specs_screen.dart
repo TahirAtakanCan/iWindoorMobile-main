@@ -109,6 +109,9 @@ class _ProjectSpecsScreenState extends State<ProjectSpecsScreen> {
         ProfileRole.sash => 'SASH',
         ProfileRole.mullion => 'MULLION',
         ProfileRole.slideSash => 'SLIDE_SASH',
+        ProfileRole.adapter => 'ADAPTER',
+        ProfileRole.doorSash => 'DOOR_SASH',
+        ProfileRole.threshold => 'THRESHOLD',
         null => '',
       };
 

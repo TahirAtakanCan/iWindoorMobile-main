@@ -157,4 +157,109 @@ List<DesignTemplate> builtInTemplates() => [
           ]),
         ),
       ),
+      DesignTemplate(
+        id: 'builtin-9',
+        name: 'Çift kanat (orta kayıtsız)',
+        category: 'WINDOW',
+        defaultWidth: 1400,
+        defaultHeight: 1400,
+        build: (w, h, s) => WindowDesign(
+          width: w,
+          height: h,
+          seriesId: s,
+          root: SplitNode(
+            id: 'n1',
+            dir: SplitDir.v,
+            sizes: const [1, 1],
+            joint: JointKind.adapter,
+            children: [
+              SashNode(id: 'n2', opening: OpeningType.turnLeft, passive: true, child: _g('n3')),
+              SashNode(id: 'n4', opening: OpeningType.tiltTurnRight, child: _g('n5')),
+            ],
+          ),
+        ),
+      ),
+      DesignTemplate(
+        id: 'builtin-10',
+        name: 'Balkon kapısı (eşikli)',
+        category: 'DOOR',
+        defaultWidth: 800,
+        defaultHeight: 2200,
+        build: (w, h, s) => WindowDesign(
+          width: w,
+          height: h,
+          seriesId: s,
+          bottom: BottomKind.threshold,
+          root: SashNode(
+            id: 'n1',
+            opening: OpeningType.tiltTurnLeft,
+            child: SplitNode(id: 'n2', dir: SplitDir.h, sizes: const [3, 1], children: [
+              _g('n3'),
+              _g('n4', fill: FillType.panel),
+            ]),
+          ),
+        ),
+      ),
+      DesignTemplate(
+        id: 'builtin-11',
+        name: 'Servis kapısı',
+        category: 'DOOR',
+        defaultWidth: 900,
+        defaultHeight: 2100,
+        build: (w, h, s) => WindowDesign(
+          width: w,
+          height: h,
+          seriesId: s,
+          bottom: BottomKind.threshold,
+          root: SashNode(
+            id: 'n1',
+            kind: SashKind.door,
+            opening: OpeningType.turnRight,
+            child: SplitNode(id: 'n2', dir: SplitDir.h, sizes: const [1, 1], children: [
+              _g('n3'),
+              _g('n4', fill: FillType.panel),
+            ]),
+          ),
+        ),
+      ),
+      DesignTemplate(
+        id: 'builtin-12',
+        name: 'Çift kanat kapı',
+        category: 'DOOR',
+        defaultWidth: 1500,
+        defaultHeight: 2200,
+        build: (w, h, s) => WindowDesign(
+          width: w,
+          height: h,
+          seriesId: s,
+          bottom: BottomKind.threshold,
+          root: SplitNode(
+            id: 'n1',
+            dir: SplitDir.v,
+            sizes: const [1, 1],
+            joint: JointKind.adapter,
+            children: [
+              SashNode(
+                id: 'n2',
+                kind: SashKind.door,
+                opening: OpeningType.turnLeft,
+                passive: true,
+                child: SplitNode(id: 'n3', dir: SplitDir.h, sizes: const [1, 1], children: [
+                  _g('n4'),
+                  _g('n5', fill: FillType.panel),
+                ]),
+              ),
+              SashNode(
+                id: 'n6',
+                kind: SashKind.door,
+                opening: OpeningType.turnRight,
+                child: SplitNode(id: 'n7', dir: SplitDir.h, sizes: const [1, 1], children: [
+                  _g('n8'),
+                  _g('n9', fill: FillType.panel),
+                ]),
+              ),
+            ],
+          ),
+        ),
+      ),
     ];

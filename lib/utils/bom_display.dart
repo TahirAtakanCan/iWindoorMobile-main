@@ -2,19 +2,22 @@ import 'package:windoor_core/windoor_core.dart';
 
 import '../services/design_api.dart';
 
-/// Atölye kesim listesi sırası: Kasa → Kanat → Sürme → Orta kayıt → Çıta → Dubleks.
+/// Atölye kesim listesi sırası: Kasa → Eşik → Kanat → Kapı → Sürme → Orta kayıt → Adaptör → Çıta → Dubleks.
 int cutListRank(BomLine l) {
   if (l.group == BomGroup.profile) {
     return switch (l.role) {
       ProfileRole.frame => 0,
-      ProfileRole.sash => 1,
-      ProfileRole.slideSash => 2,
-      ProfileRole.mullion => 3,
-      null => 4,
+      ProfileRole.threshold => 1,
+      ProfileRole.sash => 2,
+      ProfileRole.doorSash => 3,
+      ProfileRole.slideSash => 4,
+      ProfileRole.mullion => 5,
+      ProfileRole.adapter => 6,
+      null => 7,
     };
   }
-  if (l.group == BomGroup.bead) return 5;
-  if (l.group == BomGroup.duplex) return 6;
+  if (l.group == BomGroup.bead) return 8;
+  if (l.group == BomGroup.duplex) return 9;
   return 99;
 }
 

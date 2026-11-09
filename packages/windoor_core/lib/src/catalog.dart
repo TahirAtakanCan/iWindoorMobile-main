@@ -15,12 +15,20 @@ class SeriesGeometry {
   final double mullionEndAllowance; // kayıt uç payı (uç başına)
   final double slideInterlock; // sürme kanat bindirmesi
   final double duplexWidth; // dubleks çıta genişliği
+  final double adapterFace;
+  final double doorSashFace;
+  final double thresholdFace;
+  final double thresholdEndAllowance;
   final double minSashWidth;
   final double minSashHeight;
   final double maxSashWidth;
   final double maxSashHeight;
   final double maxSlideSashWidth;
   final double maxFixedGlassArea; // m²
+  final double minDoorSashWidth;
+  final double maxDoorSashWidth;
+  final double minDoorSashHeight;
+  final double maxDoorSashHeight;
 
   const SeriesGeometry({
     required this.id,
@@ -36,12 +44,20 @@ class SeriesGeometry {
     this.mullionEndAllowance = 3,
     this.slideInterlock = 40,
     this.duplexWidth = 18,
+    this.adapterFace = 40,
+    this.doorSashFace = 110,
+    this.thresholdFace = 20,
+    this.thresholdEndAllowance = 0,
     this.minSashWidth = 350,
     this.minSashHeight = 350,
     this.maxSashWidth = 1400,
     this.maxSashHeight = 2400,
     this.maxSlideSashWidth = 2000,
     this.maxFixedGlassArea = 6.0,
+    this.minDoorSashWidth = 600,
+    this.maxDoorSashWidth = 1100,
+    this.minDoorSashHeight = 1800,
+    this.maxDoorSashHeight = 2500,
   });
 
   double rebateFor(EdgeKind e) => switch (e) {
@@ -66,12 +82,20 @@ class SeriesGeometry {
       mullionEndAllowance: d('mullionEndAllowance', 3),
       slideInterlock: d('slideInterlock', 40),
       duplexWidth: d('duplexWidth', 18),
+      adapterFace: d('adapterFace', 40),
+      doorSashFace: d('doorSashFace', 110),
+      thresholdFace: d('thresholdFace', 20),
+      thresholdEndAllowance: d('thresholdEndAllowance', 0),
       minSashWidth: d('minSashWidth', 350),
       minSashHeight: d('minSashHeight', 350),
       maxSashWidth: d('maxSashWidth', 1400),
       maxSashHeight: d('maxSashHeight', 2400),
       maxSlideSashWidth: d('maxSlideSashWidth', 2000),
       maxFixedGlassArea: d('maxFixedGlassArea', 6.0),
+      minDoorSashWidth: d('minDoorSashWidth', 600),
+      maxDoorSashWidth: d('maxDoorSashWidth', 1100),
+      minDoorSashHeight: d('minDoorSashHeight', 1800),
+      maxDoorSashHeight: d('maxDoorSashHeight', 2500),
     );
   }
 }

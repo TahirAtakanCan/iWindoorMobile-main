@@ -44,7 +44,7 @@ class DesignController extends ChangeNotifier {
   LayoutResult get layout {
     if (_layout == null) {
       _layout = LayoutEngine(geometry).run(_design);
-      _issues = checkDesign(_layout!, geometry);
+      _issues = checkDesign(_layout!, geometry, _design);
     }
     return _layout!;
   }
@@ -181,6 +181,67 @@ class DesignController extends ChangeNotifier {
     if (id == null) return;
     final r = DesignOps.setOpening(_design, id, c);
     _commit(r.design, select: r.selectedId);
+  }
+
+  SashNode? get selectedSash {
+    final id = selectedId;
+    if (id == null) return null;
+    final slot = DesignOps.slotOf(_design.root, id);
+    return slot is SashNode ? slot : null;
+  }
+
+  SplitNode? get selectedSplit {
+    final id = selectedId;
+    if (id == null) return null;
+    return DesignOps.splitAround(_design.root, id);
+  }
+
+  bool get selectedSplitIsAdapterCandidate {
+    final sp = selectedSplit;
+    if (sp == null || sp.dir != SplitDir.v || sp.children.length != 2) return false;
+    return sp.children.every((c) => c is SashNode);
+  }
+
+  void makeDoubleSash() {
+    final id = selectedId;
+    if (id == null) return;
+    final r = DesignOps.makeDoubleSash(_design, id);
+    _commit(r.design, select: r.selectedId);
+  }
+
+  String? setJoint(JointKind joint) {
+    final sp = selectedSplit;
+    if (sp == null) return 'Bölme seçili değil.';
+    final r = DesignOps.setJoint(_design, sp.id, joint);
+    if (r.error != null) return r.error;
+    _commit(r.design, select: selectedId);
+    return null;
+  }
+
+  void setSashKind(SashKind kind) {
+    final sash = selectedSash;
+    if (sash == null) return;
+    final r = DesignOps.setSashKind(_design, sash.id, kind);
+    _commit(r.design, select: selectedId);
+  }
+
+  void setPassive() {
+    final sash = selectedSash;
+    if (sash == null) return;
+    final r = DesignOps.setPassive(_design, sash.id);
+    _commit(r.design, select: selectedId);
+  }
+
+  void setOutward(bool outward) {
+    final sash = selectedSash;
+    if (sash == null) return;
+    final r = DesignOps.setOutward(_design, sash.id, outward);
+    _commit(r.design, select: selectedId);
+  }
+
+  void setBottom(BottomKind bottom) {
+    final r = DesignOps.setBottom(_design, bottom);
+    _commit(r.design, select: selectedId);
   }
 
   void setGlass(String code) {

@@ -8,6 +8,7 @@ import '../models/project_quote.dart';
 import '../services/company_api.dart';
 import '../services/design_api.dart';
 import '../services/pdf_service.dart';
+import '../utils/bom_display.dart';
 
 class ProjectQuoteScreen extends StatefulWidget {
   final int projectId;
@@ -142,7 +143,6 @@ class _ProjectQuoteScreenState extends State<ProjectQuoteScreen> {
 
   Widget _buildBody(ProjectQuote q) {
     final cat = _catalog ?? CatalogSnapshot.fallback;
-    final currency = q.currency;
     return RefreshIndicator(
       onRefresh: _reloadQuote,
       child: ListView(
@@ -172,7 +172,7 @@ class _ProjectQuoteScreenState extends State<ProjectQuoteScreen> {
           if ((q.project.description ?? '').isNotEmpty)
             Text(q.project.description!, style: TextStyle(color: Colors.grey.shade700)),
           const SizedBox(height: 12),
-          ...q.windows.map((w) => _WindowCard(window: w, catalog: cat, currency: currency)),
+          ...q.windows.map((w) => _WindowCard(window: w, catalog: cat)),
           const SizedBox(height: 8),
           Card(
             child: Padding(
@@ -182,12 +182,12 @@ class _ProjectQuoteScreenState extends State<ProjectQuoteScreen> {
                 children: [
                   Text('Toplamlar', style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 8),
-                  _totalRow('Ara toplam', '${formatMoney(q.subtotal)} $currency'),
-                  _totalRow('İskonto (%${_fmtPct(q.discountPct)})', '-${formatMoney(q.discountAmount)} $currency'),
-                  _totalRow('Net', '${formatMoney(q.netTotal)} $currency'),
-                  _totalRow('KDV (%${_fmtPct(q.vatRate)})', '${formatMoney(q.vatAmount)} $currency'),
+                  _totalRow('Ara toplam', formatMoney(q.subtotal)),
+                  _totalRow('İskonto (%${_fmtPct(q.discountPct)})', '-${formatMoney(q.discountAmount)}'),
+                  _totalRow('Net', formatMoney(q.netTotal)),
+                  _totalRow('KDV (%${_fmtPct(q.vatRate)})', formatMoney(q.vatAmount)),
                   const Divider(),
-                  _totalRow('Genel toplam', '${formatMoney(q.grandTotal)} $currency', bold: true),
+                  _totalRow('Genel toplam', formatMoney(q.grandTotal), bold: true),
                 ],
               ),
             ),
@@ -198,12 +198,12 @@ class _ProjectQuoteScreenState extends State<ProjectQuoteScreen> {
           if (q.materials.isEmpty)
             const Text('Malzeme satırı yok.', style: TextStyle(color: Colors.grey))
           else
-            ...q.materials.map((m) => ListTile(
+            ...sortedQuoteLines(q.materials).map((m) => ListTile(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                   title: Text(m.name),
-                  subtitle: Text('${m.group} · ${m.code} · ${_qty(m.quantity)} ${m.unit}'),
-                  trailing: Text('${formatMoney(m.total)} $currency'),
+                  subtitle: Text('${groupTr(m.group)} · ${m.code} · ${formatQty(m.quantity, m.unit)}'),
+                  trailing: Text(formatMoney(m.total)),
                 )),
           const SizedBox(height: 40),
         ],
@@ -222,15 +222,13 @@ class _ProjectQuoteScreenState extends State<ProjectQuoteScreen> {
         ),
       );
 
-  static String _qty(double q) => q == q.roundToDouble() ? q.toStringAsFixed(0) : q.toStringAsFixed(2);
 }
 
 class _WindowCard extends StatelessWidget {
   final QuoteWindow window;
   final CatalogSnapshot catalog;
-  final String currency;
 
-  const _WindowCard({required this.window, required this.catalog, required this.currency});
+  const _WindowCard({required this.window, required this.catalog});
 
   @override
   Widget build(BuildContext context) {
@@ -263,8 +261,8 @@ class _WindowCard extends StatelessWidget {
                     '${window.seriesName != null ? ' · ${window.seriesName}' : ''}',
                     style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
                   ),
-                  Text('${window.quantity} adet · birim ${formatMoney(window.unitPrice)} $currency'),
-                  Text('Tutar: ${formatMoney(window.lineTotal)} $currency',
+                  Text('${window.quantity} adet · birim ${formatMoney(window.unitPrice)}'),
+                  Text('Tutar: ${formatMoney(window.lineTotal)}',
                       style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.green)),
                   if (window.warnings.isNotEmpty)
                     Padding(

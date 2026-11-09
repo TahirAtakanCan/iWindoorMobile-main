@@ -9,6 +9,7 @@ import '../models/project.dart';
 import '../models/catalog.dart';
 import '../services/design_api.dart';
 import '../services/project_file_api.dart';
+import '../utils/format.dart';
 import '../widgets/design_thumbnail.dart';
 import 'design_editor/design_editor_screen.dart';
 import 'project_quote_screen.dart';
@@ -369,8 +370,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     Text("Açıklama: ${project.description}", style: TextStyle(color: Colors.grey[800])),
                     const SizedBox(height: 5),
                     Text(
-                      "Toplam Tutar: ${project.totalPrice.toStringAsFixed(2)} TL", 
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green)
+                      'Toplam Tutar: ${formatMoney(project.totalPrice)}',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green),
                     ),
                     // İleride buraya Toplam m2, Ağırlık vb. eklenecek
                   ],

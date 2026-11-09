@@ -6,7 +6,7 @@ import '../../models/catalog.dart';
 import '../../services/auth_service.dart';
 import '../../services/catalog_admin_api.dart';
 import '../../services/design_api.dart';
-import '../../services/pdf_service.dart' hide hardwareKindTr;
+import '../../utils/format.dart';
 
 /// Katalog ve fiyat yönetimi: profil, cam, aksesuar, donanım kuralları.
 class CatalogScreen extends StatefulWidget {
@@ -72,7 +72,7 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
     }
   }
 
-  String _tl(num v) => '${formatMoney(v)} ₺';
+  String _tl(num v) => formatMoney(v);
 
   void _snack(String msg, {bool error = false}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -112,12 +112,13 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
             DropdownButtonFormField<String>(
               key: ValueKey('target-$target'),
               initialValue: target,
+              isExpanded: true,
               decoration: const InputDecoration(labelText: 'Hedef', border: OutlineInputBorder()),
               items: const [
-                DropdownMenuItem(value: 'PROFILE', child: Text('Profiller')),
-                DropdownMenuItem(value: 'GLASS', child: Text('Camlar')),
-                DropdownMenuItem(value: 'ACCESSORY', child: Text('Aksesuarlar')),
-                DropdownMenuItem(value: 'ALL', child: Text('Tümü')),
+                DropdownMenuItem(value: 'PROFILE', child: Text('Profiller', overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: 'GLASS', child: Text('Camlar', overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: 'ACCESSORY', child: Text('Aksesuarlar', overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: 'ALL', child: Text('Tümü', overflow: TextOverflow.ellipsis)),
               ],
               onChanged: (v) => setLocal(() => target = v ?? 'ALL'),
             ),
@@ -210,7 +211,10 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
                   ),
                 )
               : Column(children: [
-                  _filterBar(),
+                  AnimatedBuilder(
+                    animation: _tabs,
+                    builder: (_, __) => _tabs.index == 3 ? const SizedBox.shrink() : _filterBar(),
+                  ),
                   Expanded(
                     child: TabBarView(controller: _tabs, children: [
                       _profilesTab(),
@@ -529,6 +533,7 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
               DropdownButtonFormField<String>(
                 key: ValueKey('style-$style'),
                 initialValue: style,
+                isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Görünüm', border: OutlineInputBorder()),
                 items: [
                   for (final e in GlassLook.styles.entries)
@@ -537,7 +542,7 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
                       child: Row(children: [
                         GlassLook.forStyle(e.key).swatch(size: 16),
                         const SizedBox(width: 8),
-                        Text(e.value),
+                        Expanded(child: Text(e.value, overflow: TextOverflow.ellipsis)),
                       ]),
                     ),
                 ],
@@ -689,11 +694,12 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
               DropdownButtonFormField<String>(
                 key: ValueKey('unit-$unit'),
                 initialValue: unit,
+                isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Birim', border: OutlineInputBorder()),
                 items: const [
-                  DropdownMenuItem(value: 'PIECE', child: Text('Adet')),
-                  DropdownMenuItem(value: 'METER', child: Text('Metre')),
-                  DropdownMenuItem(value: 'SET', child: Text('Takım')),
+                  DropdownMenuItem(value: 'PIECE', child: Text('Adet', overflow: TextOverflow.ellipsis)),
+                  DropdownMenuItem(value: 'METER', child: Text('Metre', overflow: TextOverflow.ellipsis)),
+                  DropdownMenuItem(value: 'SET', child: Text('Takım', overflow: TextOverflow.ellipsis)),
                 ],
                 onChanged: (v) => setLocal(() => unit = v ?? unit),
               ),
@@ -754,41 +760,83 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
 
   // ---------- DONANIM ----------
 
+  String _seriesName(int? seriesId) {
+    if (seriesId == null) return 'Tüm seriler';
+    for (final s in _snap?.series ?? const <SeriesInfo>[]) {
+      if (s.id == seriesId) return s.name;
+    }
+    return 'Seri #$seriesId';
+  }
+
+  Widget _ruleTile(HardwareRule r) {
+    return Card(
+      child: ListTile(
+        title: Text(r.accessoryName?.isNotEmpty == true ? r.accessoryName! : r.accessoryCode),
+        subtitle: Text('${r.accessoryCode} · ${hardwareQtyTypeTr(r.qtyType, r.qty)}'),
+        trailing: _isAdmin
+            ? Row(mainAxisSize: MainAxisSize.min, children: [
+                IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => _editRule(r)),
+                IconButton(icon: const Icon(Icons.delete_outline), onPressed: () => _deleteRule(r)),
+              ])
+            : null,
+        onTap: _isAdmin ? () => _editRule(r) : null,
+      ),
+    );
+  }
+
   Widget _hardwareTab() {
     const kinds = ['TURN', 'TILT', 'TILT_TURN', 'SLIDE'];
-    final filtered = _rules.where((r) => _match(_query, [r.accessoryCode, r.accessoryName, r.kind, hardwareKindTr(r.kind)])).toList();
-
+    final theme = Theme.of(context);
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
         for (final kind in kinds) ...[
           Padding(
             padding: const EdgeInsets.only(top: 8, bottom: 6),
-            child: Text(hardwareKindTr(kind), style: Theme.of(context).textTheme.titleMedium),
+            child: Text(hardwareKindTr(kind), style: theme.textTheme.titleMedium),
           ),
-          ...filtered.where((r) => r.kind == kind).map((r) {
-            return Card(
-              child: ListTile(
-                title: Text(r.accessoryName?.isNotEmpty == true ? r.accessoryName! : r.accessoryCode),
-                subtitle: Text('${r.accessoryCode} · ${hardwareQtyTypeTr(r.qtyType, r.qty)}'),
-                trailing: _isAdmin
-                    ? Row(mainAxisSize: MainAxisSize.min, children: [
-                        IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => _editRule(r)),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline),
-                          onPressed: () => _deleteRule(r),
-                        ),
-                      ])
-                    : null,
-                onTap: _isAdmin ? () => _editRule(r) : null,
-              ),
-            );
-          }),
-          if (filtered.where((r) => r.kind == kind).isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text('Kural yok.', style: Theme.of(context).textTheme.bodySmall),
-            ),
+          ...() {
+            final ofKind = _rules.where((r) => r.kind == kind).toList();
+            if (ofKind.isEmpty) {
+              return [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text('Kural yok.', style: theme.textTheme.bodySmall),
+                ),
+              ];
+            }
+            final seriesIds = <int?>{null, ...ofKind.map((r) => r.seriesId)};
+            // null (tüm seriler) önce, sonra ada göre
+            final ordered = seriesIds.toList()
+              ..sort((a, b) {
+                if (a == null && b == null) return 0;
+                if (a == null) return -1;
+                if (b == null) return 1;
+                return _seriesName(a).compareTo(_seriesName(b));
+              });
+            final widgets = <Widget>[];
+            for (final sid in ordered) {
+              final rows = ofKind.where((r) => r.seriesId == sid).toList();
+              if (rows.isEmpty) continue;
+              widgets.add(Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 2, left: 4),
+                child: Text(_seriesName(sid), style: theme.textTheme.titleSmall),
+              ));
+              if (sid != null) {
+                widgets.add(Padding(
+                  padding: const EdgeInsets.only(left: 4, bottom: 6),
+                  child: Text(
+                    'Bu seride yalnızca aşağıdaki kurallar geçerli',
+                    style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ));
+              }
+              for (final r in rows) {
+                widgets.add(_ruleTile(r));
+              }
+            }
+            return widgets;
+          }(),
         ],
       ],
     );
@@ -824,10 +872,12 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
       _snack('Aktif aksesuar yok. Önce aksesuar ekleyin.', error: true);
       return;
     }
+    final series = _snap!.series.where((s) => s.id != 0).toList();
     var kind = existing?.kind ?? 'TURN';
     var qtyType = existing?.qtyType ?? 'PER_SASH';
     var code = existing?.accessoryCode ?? activeAcc.first.code;
     if (!activeAcc.any((a) => a.code == code)) code = activeAcc.first.code;
+    int? seriesId = existing?.seriesId;
     final qtyCtrl = TextEditingController(text: (existing?.qty ?? 1).toString());
 
     final save = await showDialog<bool>(
@@ -840,12 +890,13 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
               DropdownButtonFormField<String>(
                 key: ValueKey('kind-$kind'),
                 initialValue: kind,
+                isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Tür', border: OutlineInputBorder()),
                 items: const [
-                  DropdownMenuItem(value: 'TURN', child: Text('Açılır')),
-                  DropdownMenuItem(value: 'TILT', child: Text('Vasistas')),
-                  DropdownMenuItem(value: 'TILT_TURN', child: Text('Çift açılım')),
-                  DropdownMenuItem(value: 'SLIDE', child: Text('Sürme')),
+                  DropdownMenuItem(value: 'TURN', child: Text('Açılır', overflow: TextOverflow.ellipsis)),
+                  DropdownMenuItem(value: 'TILT', child: Text('Vasistas', overflow: TextOverflow.ellipsis)),
+                  DropdownMenuItem(value: 'TILT_TURN', child: Text('Çift açılım', overflow: TextOverflow.ellipsis)),
+                  DropdownMenuItem(value: 'SLIDE', child: Text('Sürme', overflow: TextOverflow.ellipsis)),
                 ],
                 onChanged: (v) => setLocal(() => kind = v ?? kind),
               ),
@@ -853,20 +904,46 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
               DropdownButtonFormField<String>(
                 key: ValueKey('acc-$code'),
                 initialValue: code,
+                isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Aksesuar', border: OutlineInputBorder()),
                 items: [
-                  for (final a in activeAcc) DropdownMenuItem(value: a.code, child: Text('${a.name} (${a.code})')),
+                  for (final a in activeAcc)
+                    DropdownMenuItem(
+                      value: a.code,
+                      child: Text('${a.name} (${a.code})', overflow: TextOverflow.ellipsis),
+                    ),
                 ],
                 onChanged: (v) => setLocal(() => code = v ?? code),
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<int?>(
+                key: ValueKey('series-$seriesId'),
+                initialValue: seriesId,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Seri', border: OutlineInputBorder()),
+                items: [
+                  const DropdownMenuItem<int?>(
+                    value: null,
+                    child: Text('Tüm seriler', overflow: TextOverflow.ellipsis),
+                  ),
+                  for (final s in series)
+                    DropdownMenuItem<int?>(
+                      value: s.id,
+                      child: Text(s.name, overflow: TextOverflow.ellipsis),
+                    ),
+                ],
+                onChanged: (v) => setLocal(() => seriesId = v),
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 key: ValueKey('qty-$qtyType'),
                 initialValue: qtyType,
+                isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Miktar tipi', border: OutlineInputBorder()),
                 items: const [
-                  DropdownMenuItem(value: 'PER_SASH', child: Text('Kanat başına')),
-                  DropdownMenuItem(value: 'PER_PERIMETER_METER', child: Text('Çevre metresi başına')),
+                  DropdownMenuItem(value: 'PER_SASH', child: Text('Kanat başına', overflow: TextOverflow.ellipsis)),
+                  DropdownMenuItem(
+                      value: 'PER_PERIMETER_METER', child: Text('Çevre metresi başına', overflow: TextOverflow.ellipsis)),
                 ],
                 onChanged: (v) => setLocal(() => qtyType = v ?? qtyType),
               ),
@@ -894,6 +971,7 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
     if (existing == null) {
       final ok = await _runWrite(() => _api.createHardwareRule(
             kind: kind,
+            seriesId: seriesId,
             accessoryCode: code,
             qtyType: qtyType,
             qty: qty,
@@ -906,7 +984,7 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
       final ok = await _runWrite(() => _api.updateHardwareRule(
             existing.id,
             kind: kind,
-            seriesId: existing.seriesId,
+            seriesId: seriesId,
             accessoryCode: code,
             qtyType: qtyType,
             qty: qty,

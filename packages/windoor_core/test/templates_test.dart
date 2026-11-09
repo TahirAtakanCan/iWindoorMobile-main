@@ -25,6 +25,14 @@ void main() {
     }
   });
 
+  test('her yerleşik şablon varsayılan ölçüde checkDesign hiç uyarı vermez', () {
+    for (final t in templates) {
+      final d = t.build(t.defaultWidth, t.defaultHeight, '1');
+      final issues = checkDesign(engine.run(d), series);
+      expect(issues, isEmpty, reason: '${t.name}: ${issues.map((i) => i.message).join('; ')}');
+    }
+  });
+
   test('şablon 7: 2 SLIDE donanımı', () {
     final t = templates.firstWhere((x) => x.id == 'builtin-7');
     final bom = engine.run(t.build(t.defaultWidth, t.defaultHeight, '1')).bom;

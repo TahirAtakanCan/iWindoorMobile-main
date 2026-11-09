@@ -5,12 +5,14 @@ import '../drawing/design_canvas.dart';
 import '../drawing/glass_look.dart';
 import '../models/catalog.dart';
 import '../models/window_unit.dart';
+import '../utils/format.dart';
 
 /// Tasarım küçük resmi: proje kartı veya şablon seçici.
 class DesignThumbnail extends StatelessWidget {
   final WindowDesign design;
   final String title;
   final String subtitle;
+  final String? subtitle2;
   final CatalogSnapshot? catalog;
   final Object? seriesId;
   final bool showCaption;
@@ -20,6 +22,7 @@ class DesignThumbnail extends StatelessWidget {
     required this.design,
     required this.title,
     required this.subtitle,
+    this.subtitle2,
     this.catalog,
     this.seriesId,
     this.showCaption = true,
@@ -31,8 +34,8 @@ class DesignThumbnail extends StatelessWidget {
       design: unit.previewDesign,
       title: unit.name,
       subtitle: '${unit.width.toInt()} × ${unit.height.toInt()} mm'
-          '${unit.quantity > 1 ? '  ·  ${unit.quantity} adet' : ''}'
-          '${unit.unitPrice != null ? '  ·  ${unit.unitPrice!.toStringAsFixed(0)} TL' : ''}',
+          '${unit.quantity > 1 ? '  ·  ${unit.quantity} adet' : ''}',
+      subtitle2: unit.unitPrice != null ? formatMoney(unit.unitPrice!) : null,
       catalog: catalog,
       seriesId: unit.seriesId,
     );
@@ -78,6 +81,12 @@ class DesignThumbnail extends StatelessWidget {
                   style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant),
                   overflow: TextOverflow.ellipsis,
                 ),
+                if (subtitle2 != null)
+                  Text(
+                    subtitle2!,
+                    style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis,
+                  ),
               ]),
             ),
         ],

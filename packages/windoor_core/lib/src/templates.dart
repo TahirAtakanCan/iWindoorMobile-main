@@ -95,7 +95,7 @@ List<DesignTemplate> builtInTemplates() => [
           width: w,
           height: h,
           seriesId: s,
-          root: SplitNode(id: 'n1', dir: SplitDir.h, sizes: const [1, 3], children: [
+          root: SplitNode(id: 'n1', dir: SplitDir.h, sizes: const [500, 1200], children: [
             SashNode(id: 'n2', opening: OpeningType.tilt, child: _g('n3')),
             SashNode(id: 'n4', opening: OpeningType.tiltTurnRight, child: _g('n5')),
           ]),
@@ -111,7 +111,8 @@ List<DesignTemplate> builtInTemplates() => [
           width: w,
           height: h,
           seriesId: s,
-          root: SplitNode(id: 'n1', dir: SplitDir.h, sizes: const [1, 3], children: [
+          // Üst sabit ~450 mm kalır; [1,3] oranı korunur (uyarı yok).
+          root: SplitNode(id: 'n1', dir: SplitDir.h, sizes: const [500, 1300], children: [
             _g('n2'),
             SplitNode(id: 'n3', dir: SplitDir.v, sizes: const [1, 1], children: [
               SashNode(id: 'n4', opening: OpeningType.turnLeft, child: _g('n5')),

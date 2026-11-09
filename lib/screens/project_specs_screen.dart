@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
-import '../services/api_service.dart';
-import '../models/project_specs.dart';
+import 'package:windoor_core/windoor_core.dart';
 
+import '../models/catalog.dart';
+import '../models/project.dart';
+import '../services/api_service.dart';
+import '../services/design_api.dart';
+import '../utils/format.dart';
+
+/// Teknik özellikler: pencerelerin tasarımı + katalog snapshot'tan üretilir.
 class ProjectSpecsScreen extends StatefulWidget {
   final int projectId;
   const ProjectSpecsScreen({super.key, required this.projectId});
@@ -11,102 +17,180 @@ class ProjectSpecsScreen extends StatefulWidget {
 }
 
 class _ProjectSpecsScreenState extends State<ProjectSpecsScreen> {
-  final ApiService _apiService = ApiService();
-  late Future<ProjectSpecs?> _specsFuture;
+  final _api = ApiService();
+  final _designApi = DesignApi();
+
+  bool _loading = true;
+  String? _error;
+  String _projectName = '';
+  int _windowCount = 0;
+  double _totalAreaM2 = 0;
+  final Map<String, int> _seriesCounts = {};
+  final Map<String, double> _profileMeters = {};
+  final Map<String, double> _glassArea = {}; // key: "name · code"
+  final Map<String, int> _hardwareCounts = {};
 
   @override
   void initState() {
     super.initState();
-    _specsFuture = _apiService.getProjectSpecs(widget.projectId);
+    _load();
   }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final project = await _api.getProject(widget.projectId);
+      final catalog = await _designApi.catalog();
+      if (project == null) {
+        setState(() {
+          _error = 'Proje bulunamadı.';
+          _loading = false;
+        });
+        return;
+      }
+      _compute(project, catalog);
+      if (!mounted) return;
+      setState(() {
+        _projectName = project.name;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = ApiError.from(e).toString();
+        _loading = false;
+      });
+    }
+  }
+
+  void _compute(Project project, CatalogSnapshot catalog) {
+    _windowCount = 0;
+    _totalAreaM2 = 0;
+    _seriesCounts.clear();
+    _profileMeters.clear();
+    _glassArea.clear();
+    _hardwareCounts.clear();
+
+    for (final u in project.windowUnits) {
+      final qty = u.quantity;
+      _windowCount += qty;
+      _totalAreaM2 += u.width * u.height * qty / 1e6;
+      final design = u.previewDesign;
+      final series = catalog.seriesFor(u.seriesId ?? design.seriesId);
+      _seriesCounts[series.name] = (_seriesCounts[series.name] ?? 0) + qty;
+
+      final layout = LayoutEngine(series.geometry).run(design);
+      final bom = BomLine.aggregate(layout.bom);
+
+      for (final l in bom) {
+        if (l.group == BomGroup.profile && l.length != null) {
+          final role = profileRoleTr(_roleKey(l.role));
+          _profileMeters[role] = (_profileMeters[role] ?? 0) + l.length! * l.qty * qty / 1000;
+        } else if (l.group == BomGroup.glass || l.group == BomGroup.panel) {
+          final info = catalog.glassByCode(l.glassCode ?? '');
+          final label = info != null
+              ? '${info.name} · ${info.code}'
+              : (l.glassCode?.isNotEmpty == true ? l.glassCode! : (l.group == BomGroup.panel ? 'Panel' : 'Cam'));
+          final area = (l.w ?? 0) * (l.h ?? 0) * l.qty * qty / 1e6;
+          _glassArea[label] = (_glassArea[label] ?? 0) + area;
+        } else if (l.group == BomGroup.hardware) {
+          final kind = hardwareKindTr(l.kind);
+          _hardwareCounts[kind] = (_hardwareCounts[kind] ?? 0) + l.qty * qty;
+        }
+      }
+    }
+  }
+
+  String _roleKey(ProfileRole? r) => switch (r) {
+        ProfileRole.frame => 'FRAME',
+        ProfileRole.sash => 'SASH',
+        ProfileRole.mullion => 'MULLION',
+        ProfileRole.slideSash => 'SLIDE_SASH',
+        null => '',
+      };
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Teknik Özellikler (MEO5)")),
-      body: FutureBuilder<ProjectSpecs?>(
-        future: _specsFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (!snapshot.hasData || snapshot.data == null) {
-            return const Center(child: Text("Veri alınamadı."));
-          }
-
-          final specs = snapshot.data!;
-
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              _buildHeaderCard(specs),
-              const SizedBox(height: 20),
-              _buildSectionTitle("Kullanılan Profil Serileri"),
-              _buildListCard(specs.usedProfileTypes, Icons.view_week),
-              const SizedBox(height: 20),
-              _buildSectionTitle("Kullanılan Cam Tipleri"),
-              _buildListCard(specs.usedGlassTypes, Icons.grid_view),
-            ],
-          );
-        },
-      ),
+      appBar: AppBar(title: const Text('Teknik Özellikler')),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Text(_error!, textAlign: TextAlign.center),
+                      const SizedBox(height: 12),
+                      FilledButton(onPressed: _load, child: const Text('Tekrar dene')),
+                    ]),
+                  ),
+                )
+              : ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    Card(
+                      color: Colors.blue.shade50,
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(children: [
+                          Text(_projectName,
+                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                          const Divider(),
+                          Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+                            _stat(Icons.window, '$_windowCount', 'Pencere'),
+                            _stat(Icons.square_foot, formatQty(_totalAreaM2, 'm²'), 'Toplam alan'),
+                          ]),
+                        ]),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    _section('Kullanılan seriler', [
+                      for (final e in _seriesCounts.entries) '${e.key} · ${e.value} pencere',
+                    ], Icons.view_week),
+                    const SizedBox(height: 16),
+                    _section('Profiller', [
+                      for (final e in _profileMeters.entries) '${e.key}: ${formatQty(e.value, 'm')}',
+                    ], Icons.straighten),
+                    const SizedBox(height: 16),
+                    _section('Camlar / paneller', [
+                      for (final e in _glassArea.entries) '${e.key}: ${formatQty(e.value, 'm²')}',
+                    ], Icons.grid_view),
+                    const SizedBox(height: 16),
+                    _section('Donanım', [
+                      for (final e in _hardwareCounts.entries) '${e.key}: ${e.value} kanat',
+                    ], Icons.build_outlined),
+                  ],
+                ),
     );
   }
 
-  Widget _buildHeaderCard(ProjectSpecs specs) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: Colors.blue.shade50,
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          children: [
-            Text(specs.projectName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-            const Divider(),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildStatItem(Icons.window, "${specs.totalWindowCount}", "Pencere"),
-                _buildStatItem(Icons.square_foot, "${specs.totalAreaM2} m²", "Toplam Alan"),
-              ],
-            )
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatItem(IconData icon, String value, String label) {
-    return Column(
-      children: [
+  Widget _stat(IconData icon, String value, String label) => Column(children: [
         Icon(icon, size: 30, color: Colors.blueGrey),
         const SizedBox(height: 5),
-        Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         Text(label, style: const TextStyle(color: Colors.grey)),
-      ],
-    );
-  }
+      ]);
 
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 8, bottom: 8),
-      child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
-    );
-  }
-
-  Widget _buildListCard(List<String> items, IconData icon) {
-    if (items.isEmpty) {
-      return const Card(child: Padding(padding: EdgeInsets.all(16), child: Text("Veri yok.")));
-    }
-    return Card(
-      elevation: 2,
-      child: Column(
-        children: items.map((item) => ListTile(
-          leading: Icon(icon, color: Colors.orangeAccent),
-          title: Text(item),
-        )).toList(),
+  Widget _section(String title, List<String> items, IconData icon) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Padding(
+        padding: const EdgeInsets.only(left: 8, bottom: 8),
+        child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
       ),
-    );
+      Card(
+        child: items.isEmpty
+            ? const Padding(padding: EdgeInsets.all(16), child: Text('Veri yok.'))
+            : Column(
+                children: [
+                  for (final item in items)
+                    ListTile(dense: true, leading: Icon(icon, color: Colors.orangeAccent), title: Text(item)),
+                ],
+              ),
+      ),
+    ]);
   }
 }

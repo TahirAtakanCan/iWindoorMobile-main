@@ -296,14 +296,6 @@ String accessoryUnitTr(String unit) => switch (unit.toUpperCase()) {
       _ => unit,
     };
 
-String hardwareKindTr(String kind) => switch (kind.toUpperCase()) {
-      'TURN' => 'Açılır',
-      'TILT' => 'Vasistas',
-      'TILT_TURN' => 'Çift açılım',
-      'SLIDE' => 'Sürme',
-      _ => kind,
-    };
-
 String hardwareQtyTypeTr(String qtyType, num qty) {
   final q = qty == qty.roundToDouble() ? '${qty.round()}' : qty.toString();
   return switch (qtyType.toUpperCase()) {

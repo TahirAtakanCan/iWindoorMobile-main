@@ -190,6 +190,51 @@ class DesignController extends ChangeNotifier {
     return slot is SashNode ? slot : null;
   }
 
+  SlideNode? get selectedSlide {
+    final id = selectedId;
+    if (id == null) return null;
+    final slot = DesignOps.slotOf(_design.root, id);
+    return slot is SlideNode ? slot : null;
+  }
+
+  void setSlidePanelCount(int n) {
+    final slide = selectedSlide;
+    if (slide == null) return;
+    final r = DesignOps.setSlidePanelCount(_design, slide.id, n);
+    _commit(r.design, select: selectedId);
+  }
+
+  void setSlidePanelMove(int index, SlideMove move) {
+    final slide = selectedSlide;
+    if (slide == null) return;
+    final r = DesignOps.setSlidePanelMove(_design, slide.id, index, move);
+    _commit(r.design, select: selectedId);
+  }
+
+  void setSlideSystem(SlideSystem system) {
+    final slide = selectedSlide;
+    if (slide == null) return;
+    final r = DesignOps.setSlideSystem(_design, slide.id, system);
+    _commit(r.design, select: selectedId);
+  }
+
+  void setScreen(ScreenKind? screen) {
+    final id = selectedId;
+    if (id == null) return;
+    final sash = selectedSash;
+    final target = sash?.id ?? id;
+    final r = DesignOps.setScreen(_design, target, screen);
+    _commit(r.design, select: selectedId);
+  }
+
+  void setSlidePanelScreen(int index, ScreenKind? screen) {
+    final slide = selectedSlide;
+    if (slide == null || index < 0 || index >= slide.panels.length) return;
+    final childId = slide.panels[index].child.id;
+    final r = DesignOps.setScreen(_design, childId, screen);
+    _commit(r.design, select: selectedId);
+  }
+
   SplitNode? get selectedSplit {
     final id = selectedId;
     if (id == null) return null;

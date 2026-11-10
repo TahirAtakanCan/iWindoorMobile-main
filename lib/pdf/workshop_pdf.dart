@@ -119,6 +119,7 @@ class WorkshopPdf {
     final cutRows = workshopCutLines(bom);
     final glasses = bom.where((l) => l.group == BomGroup.glass || l.group == BomGroup.panel).toList();
     final hardware = bom.where((l) => l.group == BomGroup.hardware).toList();
+    final screens = bom.where((l) => l.group == BomGroup.screen).toList();
     final issues = checkDesign(p.layout, p.series.geometry, p.design);
     final colorLabel = p.colorName ?? (p.design.colorCode == 'white' ? 'Beyaz' : p.design.colorCode);
 
@@ -195,6 +196,26 @@ class WorkshopPdf {
         ],
         PdfColors.indigo700,
       ),
+      if (screens.isNotEmpty) ...[
+        pw.SizedBox(height: 8),
+        ..._sectionTable(
+          'Sineklik',
+          const ['Tür', 'En × Boy', 'Adet', 'm²', 'Toplam'],
+          [
+            for (final l in screens)
+              [
+                screenKindBomTr(l.kind),
+                (l.w != null && l.h != null) ? '${l.w!.round()} × ${l.h!.round()}' : '—',
+                '${l.qty}',
+                (l.w != null && l.h != null)
+                    ? (l.w! * l.h! * l.qty / 1e6).toStringAsFixed(2)
+                    : '—',
+                '${l.qty * p.unit.quantity}',
+              ],
+          ],
+          PdfColors.brown700,
+        ),
+      ],
     ];
   }
 

@@ -235,8 +235,13 @@ void _paintGeometry(
         _glass(canvas, xf, g, lookOf, stroke, hair);
       case PolylinePrim l:
         if (l.pts.isEmpty) continue;
-        canvas.setStrokeColor(const PdfColor(0.125, 0.188, 0.227));
-        canvas.setLineWidth(1.1);
+        if (l.layer == DrawLayer.screen) {
+          canvas.setStrokeColor(const PdfColor(0.5, 0.5, 0.5, 0.35));
+          canvas.setLineWidth(0.6);
+        } else {
+          canvas.setStrokeColor(const PdfColor(0.125, 0.188, 0.227));
+          canvas.setLineWidth(1.1);
+        }
         canvas.setLineJoin(PdfLineJoin.round);
         if (l.dashed) {
           for (var i = 0; i < l.pts.length - 1; i++) {

@@ -37,8 +37,9 @@ class DesignOps {
       case SashNode s:
         yield* walk(s.child);
       case SlideNode s:
-        yield* walk(s.left);
-        yield* walk(s.right);
+        for (final p in s.panels) {
+          yield* walk(p.child);
+        }
       case FillNode _:
         break;
     }
@@ -56,7 +57,7 @@ class DesignOps {
         FrameNode f => [f.child],
         SplitNode s => s.children,
         SashNode s => [s.child],
-        SlideNode s => [s.left, s.right],
+        SlideNode s => [for (final p in s.panels) p.child],
         FillNode _ => const <DesignNode>[],
       };
 
@@ -156,11 +157,86 @@ class DesignOps {
           kind: s.kind,
           passive: s.passive,
           outward: s.outward,
+          screen: s.screen,
           child: replace(s.child, id, r),
         ),
-      SlideNode s => SlideNode(id: s.id, left: replace(s.left, id, r), right: replace(s.right, id, r)),
+      SlideNode s => SlideNode(
+          id: s.id,
+          system: s.system,
+          panels: [
+            for (final p in s.panels) p.copyWith(child: replace(p.child, id, r)),
+          ],
+        ),
       FillNode f => f,
     };
+  }
+
+  static List<SlideMove> defaultSlideMoves(int n) {
+    if (n == 2) return const [SlideMove.right, SlideMove.left];
+    if (n == 3) return const [SlideMove.right, SlideMove.fixed, SlideMove.left];
+    if (n == 4) return const [SlideMove.fixed, SlideMove.right, SlideMove.left, SlideMove.fixed];
+    return [for (var i = 0; i < n; i++) i.isEven ? SlideMove.right : SlideMove.left];
+  }
+
+  /// Sürme panel sayısını 2–6 yapar; yeni paneller seçili/ilk camın kopyasıdır.
+  static EditResult setSlidePanelCount(WindowDesign d, String slideId, int n) {
+    if (n < 2 || n > 6) return EditResult(d, slideId);
+    final slide = find(d.root, slideId);
+    if (slide is! SlideNode) return EditResult(d, slideId);
+    final moves = defaultSlideMoves(n);
+    final srcFills = fills(slide);
+    final src = srcFills.isNotEmpty ? srcFills.first : const FillNode(id: 'tmp');
+    final need = (n - slide.panels.length).clamp(0, 6);
+    final ids = need > 0 ? _nextIds(d.root, need) : <String>[];
+    var idAt = 0;
+    final panels = <SlidePanel>[];
+    for (var i = 0; i < n; i++) {
+      if (i < slide.panels.length) {
+        panels.add(slide.panels[i].copyWith(move: moves[i]));
+      } else {
+        panels.add(SlidePanel(move: moves[i], child: src.copyWith(id: ids[idAt++])));
+      }
+    }
+    final next = slide.copyWith(panels: panels);
+    return EditResult(d.copyWith(root: replace(d.root, slideId, next)), slideId);
+  }
+
+  static EditResult setSlidePanelMove(WindowDesign d, String slideId, int index, SlideMove move) {
+    final slide = find(d.root, slideId);
+    if (slide is! SlideNode || index < 0 || index >= slide.panels.length) return EditResult(d, slideId);
+    final panels = [...slide.panels];
+    panels[index] = panels[index].copyWith(move: move);
+    return EditResult(d.copyWith(root: replace(d.root, slideId, slide.copyWith(panels: panels))), slideId);
+  }
+
+  static EditResult setSlideSystem(WindowDesign d, String slideId, SlideSystem system) {
+    final slide = find(d.root, slideId);
+    if (slide is! SlideNode) return EditResult(d, slideId);
+    return EditResult(d.copyWith(root: replace(d.root, slideId, slide.copyWith(system: system))), slideId);
+  }
+
+  /// Kanat veya sürme paneli (çocuk / yaprak id) için sineklik.
+  static EditResult setScreen(WindowDesign d, String nodeId, ScreenKind? screen) {
+    final n = find(d.root, nodeId);
+    if (n is SashNode) {
+      final next = n.copyWith(screen: screen, clearScreen: screen == null);
+      return EditResult(d.copyWith(root: replace(d.root, nodeId, next)), nodeId);
+    }
+    for (final node in walk(d.root)) {
+      if (node is! SlideNode) continue;
+      for (var i = 0; i < node.panels.length; i++) {
+        final child = node.panels[i].child;
+        final hit = child.id == nodeId || walk(child).any((x) => x.id == nodeId);
+        if (!hit) continue;
+        final panels = [...node.panels];
+        panels[i] = panels[i].copyWith(screen: screen, clearScreen: screen == null);
+        return EditResult(
+          d.copyWith(root: replace(d.root, node.id, node.copyWith(panels: panels))),
+          nodeId,
+        );
+      }
+    }
+    return EditResult(d, nodeId);
   }
 
   // ---------------- işlemler ----------------

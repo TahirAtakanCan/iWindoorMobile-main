@@ -19,8 +19,44 @@ enum JointKind { mullion, adapter }
 /// Kanat türü: pencere veya kapı.
 enum SashKind { window, door }
 
+/// Sürme sistemi.
+enum SlideSystem { standard, liftSlide }
+
+/// Sürme panel hareketi.
+enum SlideMove { left, right, fixed }
+
+/// Sineklik türü.
+enum ScreenKind { plise, hinged, sliding }
+
 double _d(Object? v, [double def = 0]) => v is num ? v.toDouble() : def;
 int _i(Object? v, [int def = 1]) => v is num ? v.toInt() : def;
+
+ScreenKind? _screenFromJson(Object? v) {
+  if (v == null) return null;
+  final s = '$v'.toLowerCase();
+  return switch (s) {
+    'plise' || 'pileli' => ScreenKind.plise,
+    'hinged' || 'menteseli' || 'menteşeli' => ScreenKind.hinged,
+    'sliding' || 'surme' || 'sürme' => ScreenKind.sliding,
+    _ => null,
+  };
+}
+
+String _screenJson(ScreenKind k) => k.name;
+
+SlideMove _moveFromJson(Object? v) {
+  final s = '$v'.toLowerCase();
+  return switch (s) {
+    'left' || 'sola' => SlideMove.left,
+    'fixed' || 'sabit' => SlideMove.fixed,
+    _ => SlideMove.right,
+  };
+}
+
+SlideSystem _systemFromJson(Object? v) {
+  final s = '$v'.toLowerCase();
+  return s == 'liftslide' || s == 'lift_slide' || s == 'hs' ? SlideSystem.liftSlide : SlideSystem.standard;
+}
 
 sealed class DesignNode {
   final String id;
@@ -49,10 +85,10 @@ sealed class DesignNode {
           kind: j['kind'] == 'door' ? SashKind.door : SashKind.window,
           passive: j['passive'] == true,
           outward: j['outward'] == true,
+          screen: _screenFromJson(j['screen']),
         );
       case 'slide':
-        final c = (j['children'] as List).map((e) => DesignNode.fromJson(Map<String, dynamic>.from(e as Map))).toList();
-        return SlideNode(id: id, left: c[0], right: c[1]);
+        return SlideNode.fromJson(id: id, j: j);
       case 'couple':
         final children = (j['children'] as List)
             .map((e) => DesignNode.fromJson(Map<String, dynamic>.from(e as Map)))
@@ -216,6 +252,7 @@ class SashNode extends DesignNode {
   final SashKind kind;
   final bool passive;
   final bool outward;
+  final ScreenKind? screen;
 
   const SashNode({
     required String id,
@@ -224,6 +261,7 @@ class SashNode extends DesignNode {
     this.kind = SashKind.window,
     this.passive = false,
     this.outward = false,
+    this.screen,
   }) : super(id);
 
   SashNode copyWith({
@@ -233,6 +271,8 @@ class SashNode extends DesignNode {
     SashKind? kind,
     bool? passive,
     bool? outward,
+    ScreenKind? screen,
+    bool clearScreen = false,
   }) =>
       SashNode(
         id: id ?? this.id,
@@ -241,6 +281,7 @@ class SashNode extends DesignNode {
         kind: kind ?? this.kind,
         passive: passive ?? this.passive,
         outward: outward ?? this.outward,
+        screen: clearScreen ? null : (screen ?? this.screen),
       );
 
   @override
@@ -252,19 +293,100 @@ class SashNode extends DesignNode {
         if (kind != SashKind.window) 'kind': 'door',
         if (passive) 'passive': true,
         if (outward) 'outward': true,
+        if (screen != null) 'screen': _screenJson(screen!),
       };
 }
 
+/// Sürme paneli: hareket + isteğe bağlı sineklik + iç düğüm.
+class SlidePanel {
+  final SlideMove move;
+  final ScreenKind? screen;
+  final DesignNode child;
+
+  const SlidePanel({required this.move, required this.child, this.screen});
+
+  SlidePanel copyWith({SlideMove? move, ScreenKind? screen, DesignNode? child, bool clearScreen = false}) =>
+      SlidePanel(
+        move: move ?? this.move,
+        child: child ?? this.child,
+        screen: clearScreen ? null : (screen ?? this.screen),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'move': move.name,
+        if (screen != null) 'screen': _screenJson(screen!),
+        'child': child.toJson(),
+      };
+
+  factory SlidePanel.fromJson(Map<String, dynamic> j) => SlidePanel(
+        move: _moveFromJson(j['move']),
+        screen: _screenFromJson(j['screen']),
+        child: DesignNode.fromJson(Map<String, dynamic>.from(j['child'] as Map)),
+      );
+}
+
 class SlideNode extends DesignNode {
-  final DesignNode left, right;
-  const SlideNode({required String id, required this.left, required this.right}) : super(id);
+  final SlideSystem system;
+  final List<SlidePanel> panels;
+
+  /// [panels] veya eski API: [left]/[right] (sol→right, sağ→left hareket).
+  SlideNode({
+    required String id,
+    DesignNode? left,
+    DesignNode? right,
+    List<SlidePanel>? panels,
+    this.system = SlideSystem.standard,
+  })  : panels = panels ??
+            [
+              SlidePanel(move: SlideMove.right, child: left!),
+              SlidePanel(move: SlideMove.left, child: right!),
+            ],
+        super(id);
+
+  DesignNode get left => panels.first.child;
+  DesignNode get right => panels.length > 1 ? panels[1].child : panels.first.child;
+
+  bool get isLegacyShape =>
+      system == SlideSystem.standard &&
+      panels.length == 2 &&
+      panels[0].move == SlideMove.right &&
+      panels[1].move == SlideMove.left &&
+      panels.every((p) => p.screen == null);
+
+  SlideNode copyWith({String? id, List<SlidePanel>? panels, SlideSystem? system}) => SlideNode(
+        id: id ?? this.id,
+        panels: panels ?? this.panels,
+        system: system ?? this.system,
+      );
+
+  factory SlideNode.fromJson({required String id, required Map<String, dynamic> j}) {
+    final system = _systemFromJson(j['system']);
+    if (j['panels'] is List) {
+      final panels = (j['panels'] as List)
+          .map((e) => SlidePanel.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+      return SlideNode(id: id, panels: panels, system: system);
+    }
+    final c = (j['children'] as List).map((e) => DesignNode.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+    return SlideNode(id: id, left: c[0], right: c[1], system: system);
+  }
 
   @override
-  Map<String, dynamic> toJson() => {
+  Map<String, dynamic> toJson() {
+    if (isLegacyShape) {
+      return {
         'id': id,
         'type': 'slide',
         'children': [left.toJson(), right.toJson()],
       };
+    }
+    return {
+      'id': id,
+      'type': 'slide',
+      'system': system == SlideSystem.liftSlide ? 'liftSlide' : 'standard',
+      'panels': panels.map((p) => p.toJson()).toList(),
+    };
+  }
 }
 
 /// Yaprak: cam ya da panel. Her zaman bir cam çıtası ile oturur.
@@ -327,8 +449,9 @@ class WindowDesign {
         FrameNode f =>
           f.bottom != BottomKind.frame || f.height != null || f.width != null || _nodeUsesV2(f.child),
         SplitNode s => s.joint != JointKind.mullion || s.children.any(_nodeUsesV2),
-        SashNode s => s.kind != SashKind.window || s.passive || s.outward || _nodeUsesV2(s.child),
-        SlideNode s => _nodeUsesV2(s.left) || _nodeUsesV2(s.right),
+        SashNode s =>
+          s.kind != SashKind.window || s.passive || s.outward || s.screen != null || _nodeUsesV2(s.child),
+        SlideNode s => !s.isLegacyShape || s.panels.any((p) => _nodeUsesV2(p.child)),
         FillNode _ => false,
       };
 

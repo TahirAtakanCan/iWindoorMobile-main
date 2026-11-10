@@ -41,6 +41,7 @@ String bomGroupTr(String group) => switch (group.trim().toUpperCase()) {
       'HARDWARE' => 'Donanım',
       'ACCESSORY' => 'Aksesuar',
       'COLOR' => 'Renk farkı',
+      'SCREEN' => 'Sineklik',
       _ => group,
     };
 
@@ -52,9 +53,18 @@ String hardwareKindTr(String? kind) => switch ((kind ?? '').toUpperCase()) {
       'TILT' => 'Vasistas',
       'TILT_TURN' => 'Çift açılım',
       'SLIDE' => 'Sürme',
+      'LIFT_SLIDE' => 'Kaldır-sür',
+      'SLIDE_FIXED' => 'Sürme sabit',
       'PASSIVE' => 'Pasif kanat',
       'DOOR' => 'Kapı',
       'DOOR_PASSIVE' => 'Pasif kapı kanadı',
+      _ => kind ?? '—',
+    };
+
+String screenKindBomTr(String? kind) => switch ((kind ?? '').toUpperCase()) {
+      'PLISE' => 'Pileli',
+      'HINGED' => 'Menteşeli',
+      'SLIDING' => 'Sürme',
       _ => kind ?? '—',
     };
 

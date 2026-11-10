@@ -32,6 +32,7 @@ class _CutListSheetState extends State<CutListSheet> {
     final cutRows = workshopCutLines(lines);
     final glassRows = lines.where((l) => l.group == BomGroup.glass || l.group == BomGroup.panel).toList();
     final hw = lines.where((l) => l.group == BomGroup.hardware).toList();
+    final screens = lines.where((l) => l.group == BomGroup.screen).toList();
     final theme = Theme.of(context);
     double meters(bool Function(BomLine) f) =>
         lines.where((l) => l.isBar && f(l)).fold(0.0, (a, l) => a + l.length! * l.qty / 1000);
@@ -129,6 +130,35 @@ class _CutListSheetState extends State<CutListSheet> {
                           DataCell(Text(hardwareKindTr(l.kind))),
                           DataCell(Text('${l.w!.round()} × ${l.h!.round()}')),
                           DataCell(Text('${l.qty}')),
+                        ]),
+                    ],
+                  ),
+                ),
+              ],
+              if (screens.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.only(top: 12, bottom: 4),
+                  child: Text('Sineklik', style: theme.textTheme.titleSmall),
+                ),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    headingRowHeight: 32,
+                    dataRowMinHeight: 30,
+                    dataRowMaxHeight: 34,
+                    columns: const [
+                      DataColumn(label: Text('Tür')),
+                      DataColumn(label: Text('En × Boy')),
+                      DataColumn(label: Text('Adet'), numeric: true),
+                      DataColumn(label: Text('m²'), numeric: true),
+                    ],
+                    rows: [
+                      for (final l in screens)
+                        DataRow(cells: [
+                          DataCell(Text(screenKindBomTr(l.kind))),
+                          DataCell(Text('${l.w!.round()} × ${l.h!.round()}')),
+                          DataCell(Text('${l.qty}')),
+                          DataCell(Text((l.w! * l.h! * l.qty / 1e6).toStringAsFixed(2))),
                         ]),
                     ],
                   ),

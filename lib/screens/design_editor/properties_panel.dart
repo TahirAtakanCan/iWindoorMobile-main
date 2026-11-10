@@ -71,6 +71,7 @@ class PropertiesPanel extends StatelessWidget {
               ],
             ]),
             _FramesSection(c: c),
+            if (c.selectedSlide != null) _SlideProps(c: c),
             if (c.selectedSash != null) _SashProps(c: c),
             if (c.selectedSplitIsAdapterCandidate) _JointProps(c: c),
             if (fill == null)
@@ -328,6 +329,20 @@ class _SashProps extends StatelessWidget {
           if (v != null) c.setOutward(v);
         },
       ),
+      const SizedBox(height: 10),
+      DropdownButtonFormField<ScreenKind?>(
+        key: ValueKey('screen-${sash.id}-${sash.screen}'),
+        initialValue: sash.screen,
+        isExpanded: true,
+        decoration: const InputDecoration(labelText: 'Sineklik', border: OutlineInputBorder(), isDense: true),
+        items: const [
+          DropdownMenuItem(value: null, child: Text('Yok')),
+          DropdownMenuItem(value: ScreenKind.plise, child: Text('Pileli')),
+          DropdownMenuItem(value: ScreenKind.hinged, child: Text('Menteşeli')),
+          DropdownMenuItem(value: ScreenKind.sliding, child: Text('Sürme')),
+        ],
+        onChanged: c.setScreen,
+      ),
       if (inAdapter) ...[
         const SizedBox(height: 6),
         SwitchListTile(
@@ -338,6 +353,81 @@ class _SashProps extends StatelessWidget {
             if (v && !sash.passive) c.setPassive();
           },
         ),
+      ],
+    ]);
+  }
+}
+
+class _SlideProps extends StatelessWidget {
+  final DesignController c;
+  const _SlideProps({required this.c});
+
+  @override
+  Widget build(BuildContext context) {
+    final slide = c.selectedSlide!;
+    return _Section(title: 'Sürme', children: [
+      DropdownButtonFormField<int>(
+        key: ValueKey('pc-${slide.id}-${slide.panels.length}'),
+        initialValue: slide.panels.length.clamp(2, 6),
+        isExpanded: true,
+        decoration: const InputDecoration(labelText: 'Kanat sayısı', border: OutlineInputBorder(), isDense: true),
+        items: [for (var n = 2; n <= 6; n++) DropdownMenuItem(value: n, child: Text('$n'))],
+        onChanged: (v) {
+          if (v != null) c.setSlidePanelCount(v);
+        },
+      ),
+      const SizedBox(height: 10),
+      DropdownButtonFormField<SlideSystem>(
+        key: ValueKey('sys-${slide.id}-${slide.system}'),
+        initialValue: slide.system,
+        isExpanded: true,
+        decoration: const InputDecoration(labelText: 'Sistem', border: OutlineInputBorder(), isDense: true),
+        items: const [
+          DropdownMenuItem(value: SlideSystem.standard, child: Text('Standart')),
+          DropdownMenuItem(value: SlideSystem.liftSlide, child: Text('Kaldır-sür')),
+        ],
+        onChanged: (v) {
+          if (v != null) c.setSlideSystem(v);
+        },
+      ),
+      const SizedBox(height: 12),
+      for (var i = 0; i < slide.panels.length; i++) ...[
+        Text('Panel ${i + 1}', style: Theme.of(context).textTheme.labelLarge),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 6,
+          children: [
+            for (final m in SlideMove.values)
+              ChoiceChip(
+                label: Text(switch (m) {
+                  SlideMove.left => 'Sola',
+                  SlideMove.right => 'Sağa',
+                  SlideMove.fixed => 'Sabit',
+                }),
+                selected: slide.panels[i].move == m,
+                onSelected: (_) => c.setSlidePanelMove(i, m),
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<ScreenKind?>(
+          key: ValueKey('ps-${slide.id}-$i-${slide.panels[i].screen}'),
+          initialValue: slide.panels[i].screen,
+          isExpanded: true,
+          decoration: InputDecoration(
+            labelText: 'Sineklik (panel ${i + 1})',
+            border: const OutlineInputBorder(),
+            isDense: true,
+          ),
+          items: const [
+            DropdownMenuItem(value: null, child: Text('Yok')),
+            DropdownMenuItem(value: ScreenKind.plise, child: Text('Pileli')),
+            DropdownMenuItem(value: ScreenKind.hinged, child: Text('Menteşeli')),
+            DropdownMenuItem(value: ScreenKind.sliding, child: Text('Sürme')),
+          ],
+          onChanged: (v) => c.setSlidePanelScreen(i, v),
+        ),
+        const SizedBox(height: 12),
       ],
     ]);
   }

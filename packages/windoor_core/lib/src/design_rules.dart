@@ -18,6 +18,8 @@ List<RuleIssue> checkDesign(LayoutResult layout, SeriesGeometry s, [WindowDesign
   final issues = <RuleIssue>[];
   final sashFillIds = <String>{};
 
+  // Sürme grupları (slideNodeId)
+  final slideGroups = <String, List<SashInfo>>{};
   for (final sash in layout.sashes) {
     sashFillIds.addAll(sash.fillIds);
     final w = sash.outer.w;
@@ -25,7 +27,18 @@ List<RuleIssue> checkDesign(LayoutResult layout, SeriesGeometry s, [WindowDesign
     final ids = List<String>.from(sash.fillIds);
 
     if (sash.sliding) {
-      if (w > s.maxSlideSashWidth) {
+      final sid = sash.slideNodeId ?? '_';
+      (slideGroups[sid] ??= []).add(sash);
+      final system = sash.slideSystem ?? SlideSystem.standard;
+      if (system == SlideSystem.liftSlide) {
+        if (w > s.maxLiftSlideSashWidth) {
+          issues.add(RuleIssue(
+            ids,
+            'Kaldır-sür kanat genişliği ${w.round()} mm; bu seride en fazla ${s.maxLiftSlideSashWidth.round()} mm.',
+            false,
+          ));
+        }
+      } else if (w > s.maxSlideSashWidth) {
         issues.add(RuleIssue(
           ids,
           'Sürme kanat genişliği ${w.round()} mm; bu seride en fazla ${s.maxSlideSashWidth.round()} mm.',
@@ -94,6 +107,21 @@ List<RuleIssue> checkDesign(LayoutResult layout, SeriesGeometry s, [WindowDesign
         'Kanat yüksekliği ${h.round()} mm; bu seride en fazla ${s.maxSashHeight.round()} mm.',
         false,
       ));
+    }
+  }
+
+  for (final entry in slideGroups.entries) {
+    final group = entry.value;
+    final ids = [for (final g in group) ...g.fillIds];
+    if (group.every((g) => g.slideMove == SlideMove.fixed)) {
+      issues.add(RuleIssue(ids, 'Sürmede en az bir hareketli panel olmalıdır.', true));
+    }
+    final system = group.first.slideSystem ?? SlideSystem.standard;
+    if (system == SlideSystem.liftSlide) {
+      final n = group.length;
+      if (n < 2 || n > 4) {
+        issues.add(RuleIssue(ids, 'Kaldır-sür sistemde panel sayısı 2–4 olmalıdır (şu an $n).', true));
+      }
     }
   }
 
@@ -173,8 +201,9 @@ void _checkAdapterSplits(DesignNode node, List<RuleIssue> issues) {
     case SashNode s:
       _checkAdapterSplits(s.child, issues);
     case SlideNode s:
-      _checkAdapterSplits(s.left, issues);
-      _checkAdapterSplits(s.right, issues);
+      for (final p in s.panels) {
+        _checkAdapterSplits(p.child, issues);
+      }
     case FillNode _:
       break;
   }

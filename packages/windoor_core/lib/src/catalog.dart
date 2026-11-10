@@ -26,6 +26,7 @@ class SeriesGeometry {
   final double maxSashWidth;
   final double maxSashHeight;
   final double maxSlideSashWidth;
+  final double maxLiftSlideSashWidth;
   final double maxFixedGlassArea; // m²
   final double minDoorSashWidth;
   final double maxDoorSashWidth;
@@ -57,6 +58,7 @@ class SeriesGeometry {
     this.maxSashWidth = 1400,
     this.maxSashHeight = 2400,
     this.maxSlideSashWidth = 2000,
+    this.maxLiftSlideSashWidth = 3000,
     this.maxFixedGlassArea = 6.0,
     this.minDoorSashWidth = 600,
     this.maxDoorSashWidth = 1100,
@@ -97,6 +99,7 @@ class SeriesGeometry {
       maxSashWidth: d('maxSashWidth', 1400),
       maxSashHeight: d('maxSashHeight', 2400),
       maxSlideSashWidth: d('maxSlideSashWidth', 2000),
+      maxLiftSlideSashWidth: d('maxLiftSlideSashWidth', 3000),
       maxFixedGlassArea: d('maxFixedGlassArea', 6.0),
       minDoorSashWidth: d('minDoorSashWidth', 600),
       maxDoorSashWidth: d('maxDoorSashWidth', 1100),

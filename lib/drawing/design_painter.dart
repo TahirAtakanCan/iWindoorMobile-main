@@ -89,7 +89,11 @@ class DesignPainter extends CustomPainter {
         case GlassPrim g:
           _glass(canvas, g, hair);
         case PolylinePrim l:
-          final paint = _stroke(const Color(0xFF20303A), 1.3 * hair)..strokeJoin = StrokeJoin.round;
+          final isScreen = l.layer == DrawLayer.screen;
+          final paint = _stroke(
+            isScreen ? const Color(0x59808080) : const Color(0xFF20303A),
+            (isScreen ? 0.8 : 1.3) * hair,
+          )..strokeJoin = StrokeJoin.round;
           if (l.dashed) {
             _drawDashedPolyline(canvas, l.pts, paint, 14 / t.k, 8 / t.k);
           } else {

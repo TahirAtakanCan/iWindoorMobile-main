@@ -135,6 +135,67 @@ List<DesignTemplate> builtInTemplates() => [
         ),
       ),
       DesignTemplate(
+        id: 'builtin-14',
+        name: 'Sürme 3 kanat',
+        category: 'SLIDING',
+        defaultWidth: 2800,
+        defaultHeight: 2200,
+        build: (w, h, s) => WindowDesign(
+          width: w,
+          height: h,
+          seriesId: s,
+          root: SlideNode(
+            id: 'n1',
+            panels: [
+              SlidePanel(move: SlideMove.right, child: _g('n2')),
+              SlidePanel(move: SlideMove.fixed, child: _g('n3')),
+              SlidePanel(move: SlideMove.left, child: _g('n4')),
+            ],
+          ),
+        ),
+      ),
+      DesignTemplate(
+        id: 'builtin-15',
+        name: 'Sürme 4 kanat',
+        category: 'SLIDING',
+        defaultWidth: 3600,
+        defaultHeight: 2200,
+        build: (w, h, s) => WindowDesign(
+          width: w,
+          height: h,
+          seriesId: s,
+          root: SlideNode(
+            id: 'n1',
+            panels: [
+              SlidePanel(move: SlideMove.fixed, child: _g('n2')),
+              SlidePanel(move: SlideMove.right, child: _g('n3')),
+              SlidePanel(move: SlideMove.left, child: _g('n4')),
+              SlidePanel(move: SlideMove.fixed, child: _g('n5')),
+            ],
+          ),
+        ),
+      ),
+      DesignTemplate(
+        id: 'builtin-16',
+        name: 'Kaldır-sür 2 kanat',
+        category: 'SLIDING',
+        defaultWidth: 3200,
+        defaultHeight: 2400,
+        build: (w, h, s) => WindowDesign(
+          width: w,
+          height: h,
+          seriesId: s,
+          root: SlideNode(
+            id: 'n1',
+            system: SlideSystem.liftSlide,
+            panels: [
+              SlidePanel(move: SlideMove.fixed, child: _g('n2')),
+              SlidePanel(move: SlideMove.left, child: _g('n3')),
+            ],
+          ),
+        ),
+      ),
+      DesignTemplate(
         id: 'builtin-8',
         name: 'Balkon kapısı + pencere',
         category: 'DOOR',

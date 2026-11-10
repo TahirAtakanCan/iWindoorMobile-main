@@ -26,7 +26,7 @@ class Box {
 
 // ---------- primitifler ----------
 /// Çizim sırası (alttan üste) bu enum sırasıdır.
-enum DrawLayer { glass, duplex, bead, mullion, frame, coupling, sash, adapter, hardware, symbol, label, dims }
+enum DrawLayer { glass, duplex, screen, bead, mullion, frame, coupling, sash, adapter, hardware, symbol, label, dims }
 
 enum ProfileSide { top, right, bottom, left }
 
@@ -86,7 +86,7 @@ class HitArea {
 }
 
 // ---------- kesim listesi (backend BomPricer biçimi) ----------
-enum BomGroup { profile, bead, duplex, glass, panel, hardware, color }
+enum BomGroup { profile, bead, duplex, glass, panel, hardware, color, screen }
 
 /// Profil satırının rolü: sunucu bunu serideki ilgili profile eşler.
 enum ProfileRole { frame, sash, mullion, slideSash, adapter, doorSash, threshold, coupling }
@@ -137,9 +137,24 @@ class BomLine {
         glassCode = null,
         qty = 1;
 
+  BomLine.screen(ScreenKind screenKind, this.w, this.h, this.qty)
+      : group = BomGroup.screen,
+        label = 'Sineklik',
+        kind = switch (screenKind) {
+          ScreenKind.plise => 'PLISE',
+          ScreenKind.hinged => 'HINGED',
+          ScreenKind.sliding => 'SLIDING',
+        },
+        length = null,
+        cut = null,
+        role = null,
+        glassCode = null,
+        colorCode = null;
+
   bool get isBar => length != null;
   bool get isHardware => group == BomGroup.hardware;
   bool get isColor => group == BomGroup.color;
+  bool get isScreen => group == BomGroup.screen;
 
   static String _roleName(ProfileRole r) => switch (r) {
         ProfileRole.frame => 'FRAME',
@@ -174,6 +189,14 @@ class BomLine {
   BomLine _withQty(int q) {
     if (isColor) return BomLine.color(colorCode);
     if (isHardware) return BomLine.hardware(kind!, w!, h!, q);
+    if (isScreen) {
+      final sk = switch ((kind ?? '').toUpperCase()) {
+        'HINGED' => ScreenKind.hinged,
+        'SLIDING' => ScreenKind.sliding,
+        _ => ScreenKind.plise,
+      };
+      return BomLine.screen(sk, w!, h!, q);
+    }
     if (isBar) return BomLine.bar(group, label, length, cut, q, role: role, glassCode: glassCode);
     return BomLine.sheet(group, label, w, h, q, glassCode: glassCode!);
   }
@@ -200,6 +223,9 @@ class SashInfo {
   final SashKind kind;
   final bool passive;
   final OpeningType? opening;
+  final SlideMove? slideMove;
+  final SlideSystem? slideSystem;
+  final String? slideNodeId;
 
   const SashInfo({
     required this.fillIds,
@@ -208,6 +234,9 @@ class SashInfo {
     this.kind = SashKind.window,
     this.passive = false,
     this.opening,
+    this.slideMove,
+    this.slideSystem,
+    this.slideNodeId,
   });
 }
 
@@ -414,6 +443,10 @@ class LayoutEngine {
         final label = n.kind == SashKind.door ? 'Kapı kanadı' : 'Kanat';
         _bars(out, label, role, so);
         out.bom.add(BomLine.hardware(_hwKind(n), so.w, so.h, 1));
+        if (n.screen != null) {
+          out.bom.add(BomLine.screen(n.screen!, rect.w, rect.h, 1));
+          _screenGrid(out, si);
+        }
         out.sashes.add(SashInfo(
           fillIds: _fillIds(n.child),
           outer: so,
@@ -426,17 +459,42 @@ class LayoutEngine {
         if (!n.passive) _handle(out, n.opening, so, face: face, door: n.kind == SashKind.door);
         _area(out, n.child, si, ref, const _Edges.all(EdgeKind.sash));
       case SlideNode n:
-        final mid = rect.cx, il = s.slideInterlock, lap = s.sashLap;
-        final a = Box(rect.l - lap, rect.t - lap, mid + il / 2, rect.b + lap);
-        final b = Box(mid - il / 2, rect.t - lap, rect.r + lap, rect.b + lap);
-        for (final (i, so, child, dir) in [(0, a, n.left, 1.0), (1, b, n.right, -1.0)]) {
+        final il = s.slideInterlock, lap = s.sashLap;
+        final panels = n.panels;
+        final count = panels.length;
+        final pw = (rect.w + 2 * lap + (count - 1) * il) / count;
+        for (var i = 0; i < count; i++) {
+          final panel = panels[i];
+          final x = rect.l - lap + i * (pw - il);
+          final so = Box(x, rect.t - lap, x + pw, rect.b + lap);
           final si = so.deflate(s.sashFace);
-          _ring(out, DrawLayer.sash, so, si, z: i);
+          final z = i % 2;
+          _ring(out, DrawLayer.sash, so, si, z: z);
           _bars(out, 'Sürme kanat', ProfileRole.slideSash, so);
-          out.bom.add(BomLine.hardware('SLIDE', so.w, so.h, 1));
-          out.sashes.add(SashInfo(fillIds: _fillIds(child), outer: so, sliding: true));
-          _arrow(out, si, dir);
-          _area(out, child, si, ref, const _Edges.all(EdgeKind.sash));
+          final hw = _slideHwKind(n.system, panel.move);
+          out.bom.add(BomLine.hardware(hw, so.w, so.h, 1));
+          if (panel.screen != null) {
+            out.bom.add(BomLine.screen(panel.screen!, so.w, so.h, 1));
+            _screenGrid(out, si);
+          }
+          out.sashes.add(SashInfo(
+            fillIds: _fillIds(panel.child),
+            outer: so,
+            sliding: true,
+            slideMove: panel.move,
+            slideSystem: n.system,
+            slideNodeId: n.id,
+          ));
+          if (panel.move == SlideMove.fixed) {
+            out.prims.add(TextPrim(DrawLayer.label, Pt(si.cx, si.cy), 'Sabit'));
+          } else {
+            final dir = panel.move == SlideMove.right ? 1.0 : -1.0;
+            _arrow(out, si, dir);
+          }
+          if (n.system == SlideSystem.liftSlide) {
+            out.prims.add(TextPrim(DrawLayer.label, Pt(so.cx, so.b - 18), 'HS'));
+          }
+          _area(out, panel.child, si, ref, const _Edges.all(EdgeKind.sash));
         }
       case FillNode n:
         _fill(out, n, rect, edges);
@@ -574,14 +632,29 @@ class LayoutEngine {
     };
   }
 
+  static String _slideHwKind(SlideSystem system, SlideMove move) {
+    if (move == SlideMove.fixed) return 'SLIDE_FIXED';
+    return system == SlideSystem.liftSlide ? 'LIFT_SLIDE' : 'SLIDE';
+  }
+
   static List<String> _fillIds(DesignNode node) => switch (node) {
         FillNode n => [n.id],
         SashNode n => _fillIds(n.child),
-        SlideNode n => [..._fillIds(n.left), ..._fillIds(n.right)],
+        SlideNode n => [for (final p in n.panels) ..._fillIds(p.child)],
         SplitNode n => [for (final c in n.children) ..._fillIds(c)],
         FrameNode n => _fillIds(n.child),
         CoupleNode n => [for (final c in n.children) ..._fillIds(c)],
       };
+
+  void _screenGrid(LayoutResult out, Box r) {
+    const step = 12.0;
+    for (var x = r.l; x <= r.r + 0.01; x += step) {
+      out.prims.add(PolylinePrim(DrawLayer.screen, [Pt(x, r.t), Pt(x, r.b)]));
+    }
+    for (var y = r.t; y <= r.b + 0.01; y += step) {
+      out.prims.add(PolylinePrim(DrawLayer.screen, [Pt(r.l, y), Pt(r.r, y)]));
+    }
+  }
 
   /// DIN/EN çizim kuralı: üçgenin tepesi menteşe tarafını gösterir.
   void _symbol(LayoutResult out, OpeningType o, Box r, {bool dashed = false}) {

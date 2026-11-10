@@ -421,6 +421,8 @@ class PdfService {
       pw.SizedBox(height: 12),
       pw.Text('Cam: ${summary.glassLabel}', style: const pw.TextStyle(fontSize: 10)),
       pw.Text('Açılım: ${summary.openingLabel}', style: const pw.TextStyle(fontSize: 10)),
+      if (summary.screenLabel.isNotEmpty)
+        pw.Text('Sineklik: ${summary.screenLabel}', style: const pw.TextStyle(fontSize: 10)),
       pw.SizedBox(height: 10),
       pw.Align(
         alignment: pw.Alignment.centerRight,

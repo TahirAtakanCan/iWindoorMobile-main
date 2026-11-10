@@ -71,6 +71,10 @@ class PropertiesPanel extends StatelessWidget {
               ],
               const SizedBox(height: 10),
               _ShapeProps(c: c),
+              const SizedBox(height: 10),
+              _ShutterProps(c: c),
+              const SizedBox(height: 10),
+              _ExtrasProps(c: c),
             ]),
             _FramesSection(c: c),
             if (c.selectedSlide != null) _SlideProps(c: c),
@@ -841,6 +845,225 @@ class _NumFieldState extends State<_NumField> {
       inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
       decoration: InputDecoration(labelText: widget.label, border: const OutlineInputBorder(), isDense: true),
       onSubmitted: (_) => _submit(),
+    );
+  }
+}
+
+class _ShutterProps extends StatelessWidget {
+  final DesignController c;
+  const _ShutterProps({required this.c});
+
+  @override
+  Widget build(BuildContext context) {
+    final sh = c.design.shutter;
+    final enabled = sh != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Panjur', style: Theme.of(context).textTheme.labelLarge),
+        const SizedBox(height: 6),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Panjur ekle'),
+          value: enabled,
+          onChanged: (on) {
+            if (on) {
+              c.setShutter(const Shutter(
+                type: ShutterType.mono,
+                slat: ShutterSlat.aluminum,
+                drive: ShutterDrive.manual,
+              ));
+            } else {
+              c.setShutter(null);
+            }
+          },
+        ),
+        if (enabled) ...[
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              ChoiceChip(
+                label: const Text('Monoblok'),
+                selected: sh.type == ShutterType.mono,
+                onSelected: (_) => c.setShutter(Shutter(type: ShutterType.mono, slat: sh.slat, drive: sh.drive)),
+              ),
+              ChoiceChip(
+                label: const Text('Dış kasa'),
+                selected: sh.type == ShutterType.external,
+                onSelected: (_) => c.setShutter(Shutter(type: ShutterType.external, slat: sh.slat, drive: sh.drive)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              ChoiceChip(
+                label: const Text('Alüminyum'),
+                selected: sh.slat == ShutterSlat.aluminum,
+                onSelected: (_) => c.setShutter(Shutter(type: sh.type, slat: ShutterSlat.aluminum, drive: sh.drive)),
+              ),
+              ChoiceChip(
+                label: const Text('PVC'),
+                selected: sh.slat == ShutterSlat.pvc,
+                onSelected: (_) => c.setShutter(Shutter(type: sh.type, slat: ShutterSlat.pvc, drive: sh.drive)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              ChoiceChip(
+                label: const Text('Manuel'),
+                selected: sh.drive == ShutterDrive.manual,
+                onSelected: (_) => c.setShutter(Shutter(type: sh.type, slat: sh.slat, drive: ShutterDrive.manual)),
+              ),
+              ChoiceChip(
+                label: const Text('Motorlu'),
+                selected: sh.drive == ShutterDrive.motor,
+                onSelected: (_) => c.setShutter(Shutter(type: sh.type, slat: sh.slat, drive: ShutterDrive.motor)),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ExtrasProps extends StatefulWidget {
+  final DesignController c;
+  const _ExtrasProps({required this.c});
+
+  @override
+  State<_ExtrasProps> createState() => _ExtrasPropsState();
+}
+
+class _ExtrasPropsState extends State<_ExtrasProps> {
+  final _extTop = TextEditingController();
+  final _extLeft = TextEditingController();
+  final _extRight = TextEditingController();
+  final _extBottom = TextEditingController();
+
+  @override
+  void dispose() {
+    _extTop.dispose();
+    _extLeft.dispose();
+    _extRight.dispose();
+    _extBottom.dispose();
+    super.dispose();
+  }
+
+  void _syncFields(Extras ex) {
+    _extTop.text = ex.extension.top == 0 ? '' : ex.extension.top.round().toString();
+    _extLeft.text = ex.extension.left == 0 ? '' : ex.extension.left.round().toString();
+    _extRight.text = ex.extension.right == 0 ? '' : ex.extension.right.round().toString();
+    _extBottom.text = ex.extension.bottom == 0 ? '' : ex.extension.bottom.round().toString();
+  }
+
+  void _apply(Extras ex) => widget.c.setExtras(ex);
+
+  @override
+  Widget build(BuildContext context) {
+    final ex = widget.c.design.extras;
+    _syncFields(ex);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Ek profiller', style: Theme.of(context).textTheme.labelLarge),
+        const SizedBox(height: 6),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Dış denizlik'),
+          value: ex.sillOuter,
+          onChanged: (v) => _apply(ex.copyWith(sillOuter: v)),
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('İç denizlik'),
+          value: ex.sillInner,
+          onChanged: (v) => _apply(ex.copyWith(sillInner: v)),
+        ),
+        Text('Pervaz', style: Theme.of(context).textTheme.bodySmall),
+        Wrap(
+          spacing: 6,
+          children: [
+            ChoiceChip(
+              label: const Text('Yok'),
+              selected: ex.trim == TrimKind.none,
+              onSelected: (_) => _apply(ex.copyWith(trim: TrimKind.none)),
+            ),
+            ChoiceChip(
+              label: const Text('3 taraf'),
+              selected: ex.trim == TrimKind.three,
+              onSelected: (_) => _apply(ex.copyWith(trim: TrimKind.three)),
+            ),
+            ChoiceChip(
+              label: const Text('4 taraf'),
+              selected: ex.trim == TrimKind.four,
+              onSelected: (_) => _apply(ex.copyWith(trim: TrimKind.four)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text('Kasa genişletme (mm)', style: Theme.of(context).textTheme.bodySmall),
+        Row(children: [
+          Expanded(
+            child: TextField(
+              controller: _extTop,
+              decoration: const InputDecoration(labelText: 'Üst', border: OutlineInputBorder(), isDense: true),
+              keyboardType: TextInputType.number,
+              onSubmitted: (_) => _applyExt(ex),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: TextField(
+              controller: _extBottom,
+              decoration: const InputDecoration(labelText: 'Alt', border: OutlineInputBorder(), isDense: true),
+              keyboardType: TextInputType.number,
+              onSubmitted: (_) => _applyExt(ex),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 6),
+        Row(children: [
+          Expanded(
+            child: TextField(
+              controller: _extLeft,
+              decoration: const InputDecoration(labelText: 'Sol', border: OutlineInputBorder(), isDense: true),
+              keyboardType: TextInputType.number,
+              onSubmitted: (_) => _applyExt(ex),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: TextField(
+              controller: _extRight,
+              decoration: const InputDecoration(labelText: 'Sağ', border: OutlineInputBorder(), isDense: true),
+              keyboardType: TextInputType.number,
+              onSubmitted: (_) => _applyExt(ex),
+            ),
+          ),
+        ]),
+      ],
+    );
+  }
+
+  void _applyExt(Extras ex) {
+    _apply(
+      ex.copyWith(
+        extension: FrameExtension(
+          top: double.tryParse(_extTop.text) ?? 0,
+          bottom: double.tryParse(_extBottom.text) ?? 0,
+          left: double.tryParse(_extLeft.text) ?? 0,
+          right: double.tryParse(_extRight.text) ?? 0,
+        ),
+      ),
     );
   }
 }

@@ -120,6 +120,8 @@ class WorkshopPdf {
     final glasses = bom.where((l) => l.group == BomGroup.glass || l.group == BomGroup.panel).toList();
     final hardware = bom.where((l) => l.group == BomGroup.hardware).toList();
     final screens = bom.where((l) => l.group == BomGroup.screen).toList();
+    final shutters = bom.where((l) => l.group == BomGroup.shutter).toList();
+    final extras = bom.where((l) => l.group == BomGroup.extra).toList();
     final shapedGlass = glasses.where((l) => l.shape != null && l.shape != 'rect').toList();
     final issues = checkDesign(p.layout, p.series.geometry, p.design);
     final colorLabel = p.colorName ?? (p.design.colorCode == 'white' ? 'Beyaz' : p.design.colorCode);
@@ -134,6 +136,10 @@ class WorkshopPdf {
         '${p.unit.width.round()} × ${p.unit.height.round()} mm · ${p.unit.quantity} adet · ${p.series.name} · $colorLabel',
         style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
       ),
+      if (p.design.shutter != null)
+        pw.Text('Panjur: ${shutterSummaryLabel(p.design.shutter)}', style: const pw.TextStyle(fontSize: 9)),
+      if (!p.design.extras.isEmpty)
+        pw.Text('Ek profiller: ${extrasSummaryLabel(p.design.extras)}', style: const pw.TextStyle(fontSize: 9)),
       pw.SizedBox(height: 8),
       pw.Center(
         child: pdfWindowDrawing(
@@ -206,6 +212,42 @@ class WorkshopPdf {
         ],
         PdfColors.indigo700,
       ),
+      if (extras.isNotEmpty) ...[
+        pw.SizedBox(height: 8),
+        ..._sectionTable(
+          'Ek profiller',
+          const ['Parça', 'Ölçü (mm)', 'Kesim', 'Adet', 'Toplam'],
+          [
+            for (final l in extras)
+              [
+                l.label,
+                l.length != null ? '${l.length!.round()}' : '—',
+                l.cut ?? '—',
+                '${l.qty}',
+                '${l.qty * p.unit.quantity}',
+              ],
+          ],
+          PdfColors.grey700,
+        ),
+      ],
+      if (shutters.isNotEmpty) ...[
+        pw.SizedBox(height: 8),
+        ..._sectionTable(
+          'Panjur',
+          const ['Tür', 'Lamel', 'Tahrik', 'G×Y (mm)', 'Adet'],
+          [
+            for (final l in shutters)
+              [
+                l.kind ?? '—',
+                l.slat ?? '—',
+                l.drive ?? '—',
+                (l.w != null && l.h != null) ? '${l.w!.round()}×${l.h!.round()}' : '—',
+                '${l.qty}',
+              ],
+          ],
+          PdfColors.blueGrey,
+        ),
+      ],
       if (screens.isNotEmpty) ...[
         pw.SizedBox(height: 8),
         ..._sectionTable(

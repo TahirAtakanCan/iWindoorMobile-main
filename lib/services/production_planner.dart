@@ -195,6 +195,21 @@ class ProductionPlanner {
             piece: CutPiece(length: line.length!, label: label.trim(), cut: line.cut),
             qty: totalQty,
           );
+        } else if (line.group == BomGroup.extra) {
+          final code = switch ((line.kind ?? '').toUpperCase()) {
+            'SILL_OUTER' => 'DENIZLIK-DIS',
+            'SILL_INNER' => 'DENIZLIK-IC',
+            'TRIM' => 'PERVAZ',
+            _ => line.kind ?? 'EXTRA',
+          };
+          final label = '${p.pos} · ${line.label} · ${line.cut ?? ''}';
+          addPiece(
+            code: code,
+            name: line.label,
+            barLength: 6000,
+            piece: CutPiece(length: line.length!, label: label.trim(), cut: line.cut),
+            qty: totalQty,
+          );
         }
       }
     }
@@ -318,4 +333,5 @@ String _roleName(ProfileRole r) => switch (r) {
       ProfileRole.doorSash => 'DOOR_SASH',
       ProfileRole.threshold => 'THRESHOLD',
       ProfileRole.coupling => 'COUPLING',
+      ProfileRole.extension => 'EXTENSION',
     };

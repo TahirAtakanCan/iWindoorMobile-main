@@ -28,6 +28,122 @@ enum SlideMove { left, right, fixed }
 /// Sineklik türü.
 enum ScreenKind { plise, hinged, sliding }
 
+enum ShutterType { mono, external }
+
+enum ShutterSlat { aluminum, pvc }
+
+enum ShutterDrive { manual, motor }
+
+class Shutter {
+  final ShutterType type;
+  final ShutterSlat slat;
+  final ShutterDrive drive;
+
+  const Shutter({required this.type, required this.slat, required this.drive});
+
+  Map<String, dynamic> toJson() => {
+        'type': type.name,
+        'slat': slat.name,
+        'drive': drive.name,
+      };
+
+  factory Shutter.fromJson(Map<String, dynamic> j) => Shutter(
+        type: ShutterType.values.byName('${j['type']}'),
+        slat: ShutterSlat.values.byName('${j['slat']}'),
+        drive: ShutterDrive.values.byName('${j['drive']}'),
+      );
+}
+
+enum TrimKind { none, three, four }
+
+class FrameExtension {
+  final double top, left, right, bottom;
+
+  const FrameExtension({this.top = 0, this.left = 0, this.right = 0, this.bottom = 0});
+
+  bool get isEmpty => top == 0 && left == 0 && right == 0 && bottom == 0;
+
+  FrameExtension copyWith({double? top, double? left, double? right, double? bottom}) => FrameExtension(
+        top: top ?? this.top,
+        left: left ?? this.left,
+        right: right ?? this.right,
+        bottom: bottom ?? this.bottom,
+      );
+
+  Map<String, dynamic> toJson() => {
+        if (top != 0) 'top': top,
+        if (left != 0) 'left': left,
+        if (right != 0) 'right': right,
+        if (bottom != 0) 'bottom': bottom,
+      };
+
+  factory FrameExtension.fromJson(Object? raw) {
+    if (raw is! Map) return const FrameExtension();
+    final j = Map<String, dynamic>.from(raw);
+    return FrameExtension(
+      top: _d(j['top']),
+      left: _d(j['left']),
+      right: _d(j['right']),
+      bottom: _d(j['bottom']),
+    );
+  }
+}
+
+class Extras {
+  final bool sillOuter;
+  final bool sillInner;
+  final TrimKind trim;
+  final FrameExtension extension;
+
+  const Extras({
+    this.sillOuter = false,
+    this.sillInner = false,
+    this.trim = TrimKind.none,
+    this.extension = const FrameExtension(),
+  });
+
+  static const empty = Extras();
+
+  bool get isEmpty => !sillOuter && !sillInner && trim == TrimKind.none && extension.isEmpty;
+
+  Extras copyWith({
+    bool? sillOuter,
+    bool? sillInner,
+    TrimKind? trim,
+    FrameExtension? extension,
+  }) =>
+      Extras(
+        sillOuter: sillOuter ?? this.sillOuter,
+        sillInner: sillInner ?? this.sillInner,
+        trim: trim ?? this.trim,
+        extension: extension ?? this.extension,
+      );
+
+  Map<String, dynamic> toJson() => {
+        if (sillOuter) 'sillOuter': true,
+        if (sillInner) 'sillInner': true,
+        if (trim != TrimKind.none) 'trim': trim.name,
+        if (!extension.isEmpty) 'extension': extension.toJson(),
+      };
+
+  factory Extras.fromJson(Object? raw) {
+    if (raw is! Map) return Extras.empty;
+    final j = Map<String, dynamic>.from(raw);
+    final t = '${j['trim'] ?? 'none'}'.toLowerCase();
+    final trim = switch (t) {
+      'three' || '3' => TrimKind.three,
+      'four' || '4' => TrimKind.four,
+      _ => TrimKind.none,
+    };
+    return Extras(
+      sillOuter: j['sillOuter'] == true,
+      sillInner: j['sillInner'] == true,
+      trim: trim,
+      extension: FrameExtension.fromJson(j['extension']),
+    );
+  }
+}
+
 /// Üçgen alınlık tepe konumu.
 enum TriangleApex { left, center, right }
 
@@ -509,6 +625,8 @@ class WindowDesign {
   final BottomKind bottom;
   /// Tek kasalı tasarımın dış şekli (couple'da her [FrameNode.shape] ayrı).
   final FrameShape shape;
+  final Shutter? shutter;
+  final Extras extras;
 
   const WindowDesign({
     required this.width,
@@ -518,6 +636,8 @@ class WindowDesign {
     this.colorCode = 'white',
     this.bottom = BottomKind.frame,
     this.shape = const RectShape(),
+    this.shutter,
+    this.extras = Extras.empty,
   });
 
   /// Yeni özelliklerden hiçbiri yoksa 1, varsa 2. Couple / şekil her zaman 2.
@@ -527,6 +647,8 @@ class WindowDesign {
     if (root is CoupleNode) return true;
     if (bottom != BottomKind.frame) return true;
     if (!shape.isRect) return true;
+    if (shutter != null) return true;
+    if (!extras.isEmpty) return true;
     return _nodeUsesV2(root);
   }
 
@@ -553,6 +675,9 @@ class WindowDesign {
     String? colorCode,
     BottomKind? bottom,
     FrameShape? shape,
+    Shutter? shutter,
+    Extras? extras,
+    bool clearShutter = false,
   }) =>
       WindowDesign(
         width: width ?? this.width,
@@ -562,6 +687,8 @@ class WindowDesign {
         colorCode: colorCode ?? this.colorCode,
         bottom: bottom ?? this.bottom,
         shape: shape ?? this.shape,
+        shutter: clearShutter ? null : (shutter ?? this.shutter),
+        extras: extras ?? this.extras,
       );
 
   Map<String, dynamic> toJson() => {
@@ -572,6 +699,8 @@ class WindowDesign {
         'color': colorCode,
         if (bottom != BottomKind.frame) 'bottom': 'threshold',
         if (shape.toJson() != null) 'shape': shape.toJson(),
+        if (shutter != null) 'shutter': shutter!.toJson(),
+        if (!extras.isEmpty) 'extras': extras.toJson(),
         'root': root.toJson(),
       };
 
@@ -582,6 +711,8 @@ class WindowDesign {
         colorCode: (j['color'] as String?) ?? 'white',
         bottom: j['bottom'] == 'threshold' ? BottomKind.threshold : BottomKind.frame,
         shape: FrameShape.fromJson(j['shape']),
+        shutter: j['shutter'] is Map ? Shutter.fromJson(Map<String, dynamic>.from(j['shutter'] as Map)) : null,
+        extras: Extras.fromJson(j['extras']),
         root: DesignNode.fromJson(Map<String, dynamic>.from(j['root'] as Map)),
       );
 

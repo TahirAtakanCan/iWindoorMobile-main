@@ -44,6 +44,8 @@ String bomGroupTr(String group) => switch (group.trim().toUpperCase()) {
       'ACCESSORY' => 'Aksesuar',
       'COLOR' => 'Renk farkı',
       'SCREEN' => 'Sineklik',
+      'SHUTTER' => 'Panjur',
+      'EXTRA' => 'Ek profiller',
       _ => group,
     };
 
@@ -92,8 +94,51 @@ String profileRoleTr(String? role) => switch ((role ?? '').toUpperCase()) {
       'MULLION' => 'Orta kayıt',
       'COUPLING' => 'Birleştirme profili',
       'ADAPTER' => 'Adaptör',
+      'EXTENSION' => 'Kasa genişletme',
       _ => role ?? 'Profil',
     };
+
+String shutterTypeTr(ShutterType t) => switch (t) {
+      ShutterType.mono => 'Monoblok',
+      ShutterType.external => 'Dış kasa',
+    };
+
+String shutterSlatTr(ShutterSlat s) => switch (s) {
+      ShutterSlat.aluminum => 'Alüminyum lamel',
+      ShutterSlat.pvc => 'PVC lamel',
+    };
+
+String shutterDriveTr(ShutterDrive d) => switch (d) {
+      ShutterDrive.manual => 'Manuel',
+      ShutterDrive.motor => 'Motorlu',
+    };
+
+String shutterSummaryLabel(Shutter? sh) {
+  if (sh == null) return '';
+  return '${shutterTypeTr(sh.type)} · ${shutterSlatTr(sh.slat)} · ${shutterDriveTr(sh.drive)}';
+}
+
+String extrasSummaryLabel(Extras ex) {
+  if (ex.isEmpty) return '';
+  final parts = <String>[];
+  if (ex.sillOuter) parts.add('Dış denizlik');
+  if (ex.sillInner) parts.add('İç denizlik');
+  if (ex.trim == TrimKind.three) {
+    parts.add('3 taraf pervaz');
+  } else if (ex.trim == TrimKind.four) {
+    parts.add('4 taraf pervaz');
+  }
+  final ext = ex.extension;
+  if (!ext.isEmpty) {
+    final sides = <String>[];
+    if (ext.top > 0) sides.add('üst ${ext.top.round()}');
+    if (ext.bottom > 0) sides.add('alt ${ext.bottom.round()}');
+    if (ext.left > 0) sides.add('sol ${ext.left.round()}');
+    if (ext.right > 0) sides.add('sağ ${ext.right.round()}');
+    parts.add('Genişletme (${sides.join(', ')})');
+  }
+  return parts.join(' · ');
+}
 
 /// dd.MM.yyyy
 String formatDate(DateTime? d) {

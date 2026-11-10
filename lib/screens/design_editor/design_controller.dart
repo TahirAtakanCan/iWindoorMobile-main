@@ -297,6 +297,16 @@ class DesignController extends ChangeNotifier {
     return null;
   }
 
+  void setShutter(Shutter? shutter) {
+    final r = DesignOps.setShutter(_design, shutter);
+    _commit(r.design, select: selectedId);
+  }
+
+  void setExtras(Extras extras) {
+    final r = DesignOps.setExtras(_design, extras);
+    _commit(r.design, select: selectedId);
+  }
+
   String? addArchTop() {
     final frameId = isCoupled ? selectedFrameId : null;
     final r = DesignOps.addArchTop(_design, frameId: frameId);

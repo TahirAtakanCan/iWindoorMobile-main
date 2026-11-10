@@ -98,10 +98,10 @@ class HitArea {
 }
 
 // ---------- kesim listesi (backend BomPricer biçimi) ----------
-enum BomGroup { profile, bead, duplex, glass, panel, hardware, color, screen }
+enum BomGroup { profile, bead, duplex, glass, panel, hardware, color, screen, shutter, extra }
 
 /// Profil satırının rolü: sunucu bunu serideki ilgili profile eşler.
-enum ProfileRole { frame, sash, mullion, slideSash, adapter, doorSash, threshold, coupling }
+enum ProfileRole { frame, sash, mullion, slideSash, adapter, doorSash, threshold, coupling, extension }
 
 class BomLine {
   final BomGroup group;
@@ -117,6 +117,8 @@ class BomLine {
   final bool bent;
   final double? radius;
   final String? shape;
+  final String? slat;
+  final String? drive;
 
   const BomLine.bar(
     this.group,
@@ -132,7 +134,9 @@ class BomLine {
   })  : w = null,
         h = null,
         kind = null,
-        colorCode = null;
+        colorCode = null,
+        slat = null,
+        drive = null;
 
   BomLine.barBent(
     this.group,
@@ -148,7 +152,9 @@ class BomLine {
         kind = null,
         colorCode = null,
         bent = true,
-        shape = null;
+        shape = null,
+        slat = null,
+        drive = null;
 
   const BomLine.sheet(
     this.group,
@@ -164,7 +170,9 @@ class BomLine {
         kind = null,
         colorCode = null,
         bent = false,
-        radius = null;
+        radius = null,
+        slat = null,
+        drive = null;
 
   const BomLine.hardware(this.kind, this.w, this.h, this.qty)
       : group = BomGroup.hardware,
@@ -176,7 +184,9 @@ class BomLine {
         colorCode = null,
         bent = false,
         radius = null,
-        shape = null;
+        shape = null,
+        slat = null,
+        drive = null;
 
   const BomLine.color(this.colorCode)
       : group = BomGroup.color,
@@ -191,7 +201,9 @@ class BomLine {
         qty = 1,
         bent = false,
         radius = null,
-        shape = null;
+        shape = null,
+        slat = null,
+        drive = null;
 
   BomLine.screen(ScreenKind screenKind, this.w, this.h, this.qty)
       : group = BomGroup.screen,
@@ -208,7 +220,40 @@ class BomLine {
         colorCode = null,
         bent = false,
         radius = null,
+        shape = null,
+        slat = null,
+        drive = null;
+
+  BomLine.shutter({
+    required this.kind,
+    required this.slat,
+    required this.drive,
+    required this.w,
+    required this.h,
+    this.qty = 1,
+  })  : group = BomGroup.shutter,
+        label = 'Panjur',
+        length = null,
+        cut = null,
+        role = null,
+        glassCode = null,
+        colorCode = null,
+        bent = false,
+        radius = null,
         shape = null;
+
+  BomLine.extra(this.kind, this.label, this.length, this.cut, this.qty)
+      : group = BomGroup.extra,
+        role = null,
+        w = null,
+        h = null,
+        glassCode = null,
+        colorCode = null,
+        bent = false,
+        radius = null,
+        shape = null,
+        slat = null,
+        drive = null;
 
   bool get isBar => length != null;
   bool get isHardware => group == BomGroup.hardware;
@@ -224,6 +269,7 @@ class BomLine {
         ProfileRole.doorSash => 'DOOR_SASH',
         ProfileRole.threshold => 'THRESHOLD',
         ProfileRole.coupling => 'COUPLING',
+        ProfileRole.extension => 'EXTENSION',
       };
 
   /// Backend'in beklediği satır: {"group":"PROFILE","role":"FRAME","length":1806,"qty":2,"cut":"45/45"}
@@ -242,14 +288,22 @@ class BomLine {
         if (bent) 'bent': true,
         if (radius != null) 'radius': _r1(radius!),
         if (shape != null) 'shape': shape,
+        if (slat != null) 'slat': slat,
+        if (drive != null) 'drive': drive,
         'qty': qty,
       };
 
   String get _key =>
       '${group.name}|${role?.name}|$kind|$colorCode|$label|${length?.toStringAsFixed(1)}|'
-      '${w?.toStringAsFixed(1)}|${h?.toStringAsFixed(1)}|$cut|$glassCode|$bent|${radius?.toStringAsFixed(1)}|$shape';
+      '${w?.toStringAsFixed(1)}|${h?.toStringAsFixed(1)}|$cut|$glassCode|$bent|${radius?.toStringAsFixed(1)}|$shape|$slat|$drive';
 
   BomLine _withQty(int q) {
+    if (group == BomGroup.shutter) {
+      return BomLine.shutter(kind: kind!, slat: slat!, drive: drive!, w: w!, h: h!, qty: q);
+    }
+    if (group == BomGroup.extra) {
+      return BomLine.extra(kind!, label, length!, cut!, q);
+    }
     if (isColor) return BomLine.color(colorCode);
     if (isHardware) return BomLine.hardware(kind!, w!, h!, q);
     if (isScreen) {
@@ -336,6 +390,10 @@ class LayoutResult {
   /// Bölme id -> referans aralığı (mm). Bölme ölçüsünü düzenlerken kullanılır.
   final Map<String, double> splitSpans = {};
 
+  Box? sceneBounds;
+  double dimWidth = 0;
+  double dimHeight = 0;
+
   /// Backend'e gönderilecek kesim listesi (birleştirilmiş).
   List<Map<String, dynamic>> bomJson() => BomLine.aggregate(bom).map((l) => l.toJson()).toList();
 
@@ -381,7 +439,138 @@ class LayoutEngine {
     if (d.colorCode != 'white' && d.colorCode.isNotEmpty) {
       out.bom.add(BomLine.color(d.colorCode));
     }
+    _addShutterAndExtras(out, d);
+    _finalizeSceneBounds(out, d.width, d.height);
     return out;
+  }
+
+  void _finalizeSceneBounds(LayoutResult out, double w, double h) {
+    var l = 0.0, t = 0.0, r = w, b = h;
+    for (final p in out.prims) {
+      void consider(double x, double y) {
+        if (x < l) l = x;
+        if (y < t) t = y;
+        if (x > r) r = x;
+        if (y > b) b = y;
+      }
+
+      switch (p) {
+        case BarRect b:
+          consider(b.box.l, b.box.t);
+          consider(b.box.r, b.box.b);
+        case PolylinePrim pl:
+          for (final pt in pl.pts) {
+            consider(pt.x, pt.y);
+          }
+        case ProfilePoly pp:
+          for (final pt in pp.pts) {
+            consider(pt.x, pt.y);
+          }
+        case GlassPrim g:
+          consider(g.visible.l, g.visible.t);
+          consider(g.visible.r, g.visible.b);
+        case HandlePrim h:
+          consider(h.base.l, h.base.t);
+          consider(h.base.r, h.base.b);
+          consider(h.lever.l, h.lever.t);
+          consider(h.lever.r, h.lever.b);
+          if (h.lock != null) {
+            consider(h.lock!.l, h.lock!.t);
+            consider(h.lock!.r, h.lock!.b);
+          }
+        case TextPrim _:
+          break;
+      }
+    }
+    out.sceneBounds = Box(l, t, r, b);
+    out.dimWidth = r - l;
+    out.dimHeight = b - t;
+  }
+
+  void _addShutterAndExtras(LayoutResult out, WindowDesign d) {
+    final w = d.width;
+    final h = d.height;
+  final boxH = s.shutterBoxHeight;
+    final trimW = s.trimWidth;
+    final overhang = s.sillOverhang;
+    final trimVis = trimW / 4;
+    const sillThick = 20.0;
+
+    if (d.shutter != null) {
+      final sh = d.shutter!;
+      final kind = sh.type == ShutterType.mono ? 'MONO' : 'EXTERNAL';
+      final slat = sh.slat == ShutterSlat.aluminum ? 'ALUMINUM' : 'PVC';
+      final drive = sh.drive == ShutterDrive.manual ? 'MANUAL' : 'MOTOR';
+      out.bom.add(BomLine.shutter(
+        kind: kind,
+        slat: slat,
+        drive: drive,
+        w: w,
+        h: h + boxH,
+      ));
+      final box = Box(0, -boxH, w, 0);
+      out.prims.add(BarRect(DrawLayer.frame, box, metallic: true));
+      final lamellaStep = 28.0;
+      for (var y = -boxH + lamellaStep / 2; y < -2; y += lamellaStep) {
+        out.prims.add(PolylinePrim(DrawLayer.frame, [Pt(4, y), Pt(w - 4, y)]));
+      }
+      const railW = 8.0;
+      out.prims
+        ..add(BarRect(DrawLayer.frame, Box(-railW, -boxH, 0, h), metallic: true))
+        ..add(BarRect(DrawLayer.frame, Box(w, -boxH, w + railW, h), metallic: true));
+    }
+
+    final ex = d.extras;
+    if (ex.sillOuter) {
+      final len = w + 2 * overhang;
+      out.bom.add(BomLine.extra('SILL_OUTER', 'Dış denizlik', len, '90/90', 1));
+      out.prims.add(BarRect(DrawLayer.frame, Box(-overhang, h, w + overhang, h + sillThick)));
+    }
+    if (ex.sillInner) {
+      final len = w + 2 * overhang;
+      out.bom.add(BomLine.extra('SILL_INNER', 'İç denizlik', len, '90/90', 1));
+      out.prims.add(BarRect(DrawLayer.bead, Box(4, h - 2, w - 4, h + sillThick - 6)));
+    }
+    if (ex.trim == TrimKind.three) {
+      final topLen = w + 2 * trimW;
+      final sideLen = h + trimW;
+      out.bom
+        ..add(BomLine.extra('TRIM', 'Pervaz', topLen, '45/45', 1))
+        ..add(BomLine.extra('TRIM', 'Pervaz', sideLen, '45/90', 2));
+      out.prims
+        ..add(BarRect(DrawLayer.frame, Box(-trimVis, -trimVis, w + trimVis, 0)))
+        ..add(BarRect(DrawLayer.frame, Box(-trimVis, 0, 0, h)))
+        ..add(BarRect(DrawLayer.frame, Box(w, 0, w + trimVis, h)))
+        ..add(BarRect(DrawLayer.frame, Box(-trimVis, h, w + trimVis, h + trimVis)));
+    } else if (ex.trim == TrimKind.four) {
+      final horizLen = w + 2 * trimW;
+      final vertLen = h + 2 * trimW;
+      out.bom
+        ..add(BomLine.extra('TRIM', 'Pervaz', horizLen, '45/45', 2))
+        ..add(BomLine.extra('TRIM', 'Pervaz', vertLen, '45/45', 2));
+      out.prims
+        ..add(BarRect(DrawLayer.frame, Box(-trimVis, -trimVis, w + trimVis, 0)))
+        ..add(BarRect(DrawLayer.frame, Box(-trimVis, h, w + trimVis, h + trimVis)))
+        ..add(BarRect(DrawLayer.frame, Box(-trimVis, 0, 0, h)))
+        ..add(BarRect(DrawLayer.frame, Box(w, 0, w + trimVis, h)));
+    }
+    final ext = ex.extension;
+    if (ext.top > 0) {
+      out.bom.add(BomLine.bar(BomGroup.profile, 'Kasa genişletme', w, '90/90', 1, role: ProfileRole.extension));
+      out.prims.add(BarRect(DrawLayer.frame, Box(0, -ext.top, w, 0)));
+    }
+    if (ext.bottom > 0) {
+      out.bom.add(BomLine.bar(BomGroup.profile, 'Kasa genişletme', w, '90/90', 1, role: ProfileRole.extension));
+      out.prims.add(BarRect(DrawLayer.frame, Box(0, h, w, h + ext.bottom)));
+    }
+    if (ext.left > 0) {
+      out.bom.add(BomLine.bar(BomGroup.profile, 'Kasa genişletme', h, '90/90', 1, role: ProfileRole.extension));
+      out.prims.add(BarRect(DrawLayer.frame, Box(-ext.left, 0, 0, h)));
+    }
+    if (ext.right > 0) {
+      out.bom.add(BomLine.bar(BomGroup.profile, 'Kasa genişletme', h, '90/90', 1, role: ProfileRole.extension));
+      out.prims.add(BarRect(DrawLayer.frame, Box(w, 0, w + ext.right, h)));
+    }
   }
 
   void _runCouple(LayoutResult out, WindowDesign d, CoupleNode couple) {

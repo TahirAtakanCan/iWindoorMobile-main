@@ -52,30 +52,36 @@ pw.Widget pdfWindowDrawing({
   required double height,
   bool showDimensions = true,
 }) {
-  final fsMm = math.max(design.width, design.height) / 30;
-  final frameXs = <double>{0.0, design.width};
+  final bounds = layout.sceneBounds ?? Box(0, 0, design.width, design.height);
+  final dimW = layout.dimWidth > 0 ? layout.dimWidth : design.width;
+  final dimH = layout.dimHeight > 0 ? layout.dimHeight : design.height;
+  final fsMm = math.max(dimW, dimH) / 30;
+  final frameXs = <double>{bounds.l, bounds.r};
   for (final f in layout.frames) {
     frameXs.add(f.box.l);
     frameXs.add(f.box.r);
   }
   final xs = [..._uniq([...layout.mullionX, ...frameXs])];
-  final ys = [0.0, ..._uniq(layout.mullionY), design.height];
+  final ys = [bounds.t, ..._uniq(layout.mullionY), bounds.b];
   final hasX = xs.length > 2, hasY = ys.length > 2;
   final multiHeight = layout.frames.length > 1;
   final chainGap = fsMm * 2.4;
+  final extraTop = bounds.t < 0 ? -bounds.t : 0.0;
 
   // İki ölçü zinciri + yazılar kesilmesin (DesignPainter pad mantığı, dinamik alt/sol).
   final padL = showDimensions ? math.max(240.0, 80 + (hasY ? chainGap : 0) + fsMm * 1.8) : 30.0;
   final padB = showDimensions ? math.max(240.0, 80 + (hasX ? chainGap : 0) + fsMm * 1.8) : 30.0;
-  final padT = showDimensions ? 50.0 : 30.0;
+  final padT = showDimensions ? 50.0 + extraTop : 30.0 + extraTop;
   final padR = showDimensions ? math.max(50.0, multiHeight ? 120.0 : 50.0) : 30.0;
 
-  final totalW = design.width + padL + padR;
-  final totalH = design.height + padT + padB;
+  final sceneW = bounds.w;
+  final sceneH = bounds.h;
+  final totalW = sceneW + padL + padR;
+  final totalH = sceneH + padT + padB;
   final k = math.min(width / totalW, height / totalH);
-  final ox = (width - totalW * k) / 2 + padL * k;
-  final oy = (height - totalH * k) / 2 + padB * k;
-  final xf = _Xform(ox, oy, k, design.height, height);
+  final ox = (width - totalW * k) / 2 + padL * k - bounds.l * k;
+  final oy = (height - totalH * k) / 2 + padB * k - bounds.t * k;
+  final xf = _Xform(ox, oy, k, bounds.b, height);
   final fs = math.max(6.0, fsMm * k);
 
   final labels = <pw.Widget>[];
@@ -86,8 +92,11 @@ pw.Widget pdfWindowDrawing({
       ys,
       hasX,
       hasY,
-      design.width,
-      design.height,
+      bounds.l,
+      bounds.r,
+      bounds.t,
+      bounds.b,
+      dimH,
       fsMm,
       fs,
       frames: layout.frames,
@@ -129,8 +138,11 @@ List<pw.Widget> _dimLabels(
   List<double> ys,
   bool hasX,
   bool hasY,
-  double designW,
-  double designH,
+  double boundL,
+  double boundR,
+  double boundT,
+  double boundB,
+  double sceneH,
   double fsMm,
   double fs, {
   List<FrameBox> frames = const [],
@@ -187,13 +199,13 @@ List<pw.Widget> _dimLabels(
     }
   }
 
-  if (hasX) addHoriz(xs, designH + 80);
-  addHoriz([0, designW], designH + 80 + (hasX ? fsMm * 2.4 : 0));
-  if (hasY) addVert(ys, -80);
-  addVert([0, designH], -80 - (hasY ? fsMm * 2.4 : 0));
+  if (hasX) addHoriz(xs, boundB + 80);
+  addHoriz([boundL, boundR], boundB + 80 + (hasX ? fsMm * 2.4 : 0));
+  if (hasY) addVert(ys, boundL - 80);
+  addVert([boundT, boundB], boundL - 80 - (hasY ? fsMm * 2.4 : 0));
   if (frames.length > 1) {
     for (final f in frames) {
-      if ((f.box.h - designH).abs() < 0.5) continue;
+      if ((f.box.h - sceneH).abs() < 0.5) continue;
       addVert([f.box.t, f.box.b], f.box.r + 60, fontScale: 0.85);
     }
   }

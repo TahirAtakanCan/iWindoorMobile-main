@@ -114,6 +114,7 @@ class _ProjectSpecsScreenState extends State<ProjectSpecsScreen> {
         ProfileRole.doorSash => 'DOOR_SASH',
         ProfileRole.threshold => 'THRESHOLD',
         ProfileRole.coupling => 'COUPLING',
+        ProfileRole.extension => 'EXTENSION',
         null => '',
       };
 

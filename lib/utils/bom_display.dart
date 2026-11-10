@@ -15,11 +15,14 @@ int cutListRank(BomLine l) {
       ProfileRole.mullion => 5,
       ProfileRole.coupling => 6,
       ProfileRole.adapter => 7,
-      null => 8,
+      ProfileRole.extension => 8,
+      null => 9,
     };
   }
-  if (l.group == BomGroup.bead) return 9;
-  if (l.group == BomGroup.duplex) return 10;
+  if (l.group == BomGroup.extra) return 11;
+  if (l.group == BomGroup.bead) return 12;
+  if (l.group == BomGroup.duplex) return 13;
+  if (l.group == BomGroup.shutter) return 98;
   return 99;
 }
 
@@ -28,14 +31,17 @@ int cutListRank(BomLine l) {
 List<BomLine> workshopCutLines(Iterable<BomLine> bom) {
   final raw = bom.where(
     (l) =>
-        (l.group == BomGroup.profile || l.group == BomGroup.bead || l.group == BomGroup.duplex) &&
+        (l.group == BomGroup.profile ||
+            l.group == BomGroup.bead ||
+            l.group == BomGroup.duplex ||
+            l.group == BomGroup.extra) &&
         l.group != BomGroup.color,
   );
   final map = <String, BomLine>{};
   final order = <String>[];
   for (final l in raw) {
     final key =
-        '${l.label}|${l.length?.toStringAsFixed(1)}|${l.cut ?? ''}|${l.bent}|${l.radius?.toStringAsFixed(1)}';
+        '${l.group.name}|${l.kind ?? ''}|${l.role?.name ?? ''}|${l.label}|${l.length?.toStringAsFixed(1)}|${l.cut ?? ''}|${l.bent}|${l.radius?.toStringAsFixed(1)}';
     final prev = map[key];
     if (prev == null) {
       map[key] = l;
@@ -51,6 +57,8 @@ List<BomLine> workshopCutLines(Iterable<BomLine> bom) {
         role: prev.role,
         glassCode: prev.glassCode,
       );
+    } else if (prev.group == BomGroup.extra) {
+      map[key] = BomLine.extra(prev.kind!, prev.label, prev.length!, prev.cut!, prev.qty + l.qty);
     } else {
       map[key] = BomLine.bar(prev.group, prev.label, prev.length, prev.cut, prev.qty + l.qty, role: prev.role);
     }

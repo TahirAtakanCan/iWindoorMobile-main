@@ -1,17 +1,22 @@
 import 'package:windoor_core/windoor_core.dart';
 
 import '../models/catalog.dart';
+import 'format.dart';
 
 /// Müşteri teklifi için kısa tasarım özeti (cam / açılım / sineklik).
 class DesignSummary {
   final List<String> glassCodes;
   final List<String> openings;
   final List<String> screens;
+  final String shutterLabel;
+  final String extrasLabel;
 
   const DesignSummary({
     required this.glassCodes,
     required this.openings,
     this.screens = const [],
+    this.shutterLabel = '',
+    this.extrasLabel = '',
   });
 
   String get glassLabel => glassCodes.isEmpty ? '—' : glassCodes.join(', ');
@@ -70,6 +75,8 @@ DesignSummary summarizeDesign(WindowDesign design, {CatalogSnapshot? catalog}) {
     glassCodes: glasses.toList()..sort(),
     openings: openings.toList()..sort(),
     screens: screens.toList()..sort(),
+    shutterLabel: shutterSummaryLabel(design.shutter),
+    extrasLabel: extrasSummaryLabel(design.extras),
   );
 }
 

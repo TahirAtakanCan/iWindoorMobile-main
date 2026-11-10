@@ -423,6 +423,10 @@ class PdfService {
       pw.Text('Açılım: ${summary.openingLabel}', style: const pw.TextStyle(fontSize: 10)),
       if (summary.screenLabel.isNotEmpty)
         pw.Text('Sineklik: ${summary.screenLabel}', style: const pw.TextStyle(fontSize: 10)),
+      if (summary.shutterLabel.isNotEmpty)
+        pw.Text('Panjur: ${summary.shutterLabel}', style: const pw.TextStyle(fontSize: 10)),
+      if (summary.extrasLabel.isNotEmpty)
+        pw.Text('Ek profiller: ${summary.extrasLabel}', style: const pw.TextStyle(fontSize: 10)),
       pw.SizedBox(height: 10),
       pw.Align(
         alignment: pw.Alignment.centerRight,

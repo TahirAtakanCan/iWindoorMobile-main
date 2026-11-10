@@ -32,6 +32,9 @@ class SeriesGeometry {
   final double maxDoorSashWidth;
   final double minDoorSashHeight;
   final double maxDoorSashHeight;
+  final double shutterBoxHeight;
+  final double sillOverhang;
+  final double trimWidth;
 
   const SeriesGeometry({
     required this.id,
@@ -64,6 +67,9 @@ class SeriesGeometry {
     this.maxDoorSashWidth = 1100,
     this.minDoorSashHeight = 1800,
     this.maxDoorSashHeight = 2500,
+    this.shutterBoxHeight = 180,
+    this.sillOverhang = 30,
+    this.trimWidth = 70,
   });
 
   double rebateFor(EdgeKind e) => switch (e) {
@@ -105,6 +111,9 @@ class SeriesGeometry {
       maxDoorSashWidth: d('maxDoorSashWidth', 1100),
       minDoorSashHeight: d('minDoorSashHeight', 1800),
       maxDoorSashHeight: d('maxDoorSashHeight', 2500),
+      shutterBoxHeight: d('shutterBoxHeight', 180),
+      sillOverhang: d('sillOverhang', 30),
+      trimWidth: d('trimWidth', 70),
     );
   }
 }

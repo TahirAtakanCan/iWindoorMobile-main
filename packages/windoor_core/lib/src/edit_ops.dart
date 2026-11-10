@@ -680,4 +680,9 @@ class DesignOps {
     }
     return EditResult(d.copyWith(root: replace(d.root, frameId, frame.copyWith(bottom: bottom))), frameId);
   }
+
+  static EditResult setShutter(WindowDesign d, Shutter? shutter) =>
+      EditResult(d.copyWith(shutter: shutter, clearShutter: shutter == null), null);
+
+  static EditResult setExtras(WindowDesign d, Extras extras) => EditResult(d.copyWith(extras: extras), null);
 }

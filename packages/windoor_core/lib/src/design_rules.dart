@@ -153,9 +153,38 @@ List<RuleIssue> checkDesign(LayoutResult layout, SeriesGeometry s, [WindowDesign
     _checkAdapterSplits(design.root, issues);
     _checkFrames(design, layout, s, issues);
     _checkShapeDesign(design, s, issues, layout);
+    _checkShutterAndExtras(design, s, issues);
   }
 
   return issues;
+}
+
+void _checkShutterAndExtras(WindowDesign design, SeriesGeometry s, List<RuleIssue> issues) {
+  final sh = design.shutter;
+  if (sh == null) return;
+  final w = design.width;
+  final h = design.height;
+  final boxH = s.shutterBoxHeight;
+  if (w > 3500) {
+    issues.add(const RuleIssue([], 'Panjur genişliği 3500 mm üzerinde; kontrol edin.', false));
+  }
+  final area = w * (h + boxH) / 1e6;
+  if (area > 4 && sh.drive == ShutterDrive.manual) {
+    issues.add(const RuleIssue([], 'Motorlu panjur önerilir', false));
+  }
+  if (_designHasNonRectFrame(design)) {
+    issues.add(const RuleIssue([], 'Şekilli pencereye panjur eklenemez', true));
+  }
+}
+
+bool _designHasNonRectFrame(WindowDesign d) {
+  if (d.root is CoupleNode) {
+    for (final f in (d.root as CoupleNode).children) {
+      if (!f.shape.isRect) return true;
+    }
+    return false;
+  }
+  return !d.shape.isRect;
 }
 
 void _checkShapeDesign(WindowDesign design, SeriesGeometry s, List<RuleIssue> issues, LayoutResult layout) {

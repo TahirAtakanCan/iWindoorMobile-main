@@ -52,10 +52,15 @@ class DesignPainter extends CustomPainter {
   double get _padR => showDimensions ? 50 : 30;
 
   DrawTransform transformFor(Size size) {
-    final totalW = designW + _padL + _padR, totalH = designH + _padT + _padB;
+    final bounds = layout.sceneBounds ?? Box(0, 0, designW, designH);
+    final sceneW = bounds.w;
+    final sceneH = bounds.h;
+    final extraTop = bounds.t < 0 ? -bounds.t : 0.0;
+    final totalW = sceneW + _padL + _padR;
+    final totalH = sceneH + _padT + extraTop + _padB;
     final k = math.min(size.width / totalW, size.height / totalH);
-    final ox = (size.width - totalW * k) / 2 + _padL * k;
-    final oy = (size.height - totalH * k) / 2 + _padT * k;
+    final ox = (size.width - totalW * k) / 2 + _padL * k - bounds.l * k;
+    final oy = (size.height - totalH * k) / 2 + (_padT + extraTop) * k - bounds.t * k;
     return DrawTransform(ox, oy, k);
   }
 
@@ -351,21 +356,24 @@ class DesignPainter extends CustomPainter {
 
   // --- ölçüler: zincir (kayıt eksenleri / kasa sınırları) + toplam ---
   void _dims(Canvas c, double k) {
-    final fs = math.max(designW, designH) / 30;
+    final bounds = layout.sceneBounds ?? Box(0, 0, designW, designH);
+    final dimW = layout.dimWidth > 0 ? layout.dimWidth : designW;
+    final dimH = layout.dimHeight > 0 ? layout.dimHeight : designH;
+    final fs = math.max(dimW, dimH) / 30;
     List<double> uniq(List<double> v) => (v.map((e) => (e * 10).round() / 10).toSet().toList()..sort());
-    final frameXs = <double>{0.0, designW};
+    final frameXs = <double>{bounds.l, bounds.r};
     final multiHeight = layout.frames.length > 1;
     for (final f in layout.frames) {
       frameXs.add(f.box.l);
       frameXs.add(f.box.r);
     }
     final xs = [...uniq([...layout.mullionX, ...frameXs])];
-    final ys = [0.0, ...uniq(layout.mullionY), designH];
+    final ys = [bounds.t, ...uniq(layout.mullionY), bounds.b];
     final hasX = xs.length > 2, hasY = ys.length > 2;
-    if (hasX) _chain(c, xs, true, designH + 80, fs, k);
-    _chain(c, [0, designW], true, designH + 80 + (hasX ? fs * 2.4 : 0), fs, k);
-    if (hasY) _chain(c, ys, false, -80, fs, k);
-    _chain(c, [0, designH], false, -80 - (hasY ? fs * 2.4 : 0), fs, k);
+    if (hasX) _chain(c, xs, true, bounds.b + 80, fs, k);
+    _chain(c, [bounds.l, bounds.r], true, bounds.b + 80 + (hasX ? fs * 2.4 : 0), fs, k);
+    if (hasY) _chain(c, ys, false, bounds.l - 80, fs, k);
+    _chain(c, [bounds.t, bounds.b], false, bounds.l - 80 - (hasY ? fs * 2.4 : 0), fs, k);
     if (multiHeight) {
       for (final f in layout.frames) {
         if ((f.box.h - designH).abs() < 0.5) continue;

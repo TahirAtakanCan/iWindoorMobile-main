@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 import 'package:windoor_core/windoor_core.dart';
 
 import '../models/catalog.dart';
@@ -137,12 +138,12 @@ class _ProjectSpecsScreenState extends State<ProjectSpecsScreen> {
                   padding: const EdgeInsets.all(16),
                   children: [
                     Card(
-                      color: Colors.blue.shade50,
+                      color: Brand.glassLight,
                       child: Padding(
                         padding: const EdgeInsets.all(20),
                         child: Column(children: [
                           Text(_projectName,
-                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Brand.petrol)),
                           const Divider(),
                           Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
                             _stat(Icons.window, '$_windowCount', 'Pencere'),

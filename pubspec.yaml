@@ -1,5 +1,5 @@
 name: iwindoor_mobil
-description: "Pencere/kapı tasarım uygulaması (Android, iOS, Windows, macOS, Linux)."
+description: "Pervaz — PVC ve alüminyum pencere/kapı tasarımı, teklif, üretim ve iş takibi."
 publish_to: 'none'
 
 version: 1.1.0+2
@@ -38,3 +38,4 @@ flutter:
     - assets/fonts/Roboto-Regular.ttf
     - assets/fonts/Roboto-Bold.ttf
     - assets/fonts/LICENSE
+    - assets/branding/pervaz_mark.png

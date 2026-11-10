@@ -43,3 +43,15 @@ backend'in fiyat testleriyle birebir aynı pencereye aittir.
 
 `lib/screens/window_editor_screen.dart` ve `lib/widgets/window_painter.dart` eski editördür, artık kullanılmıyor;
 geçiş testlerden sonra silinebilir.
+
+## Marka: Pervaz
+
+Uygulamanın adı **Pervaz** (pencere ve kapıyı çevreleyen çerçeve). Kimlik kartı: `docs/branding/Pervaz_marka.png`.
+
+- Logo kaynakları (SVG): `assets/branding/source_logo_*.svg` — `rounded` (genel), `full` (iOS / maskable),
+  `macos` (kenar boşluklu), `fg` (Android adaptive ön plan).
+- Uygulama içi işaret: `assets/branding/pervaz_mark.png`, widget: `lib/widgets/brand_logo.dart`.
+- Renkler ve tema: `lib/theme/app_theme.dart` (`Brand` sabitleri, `AppTheme.light()`).
+  Petrol `#0F4C5C`, koyu petrol `#0A3540`, kehribar `#F2A33A`, cam `#8FD3D6`, zemin `#F4F7F7`.
+- Görünen ad: Android `android:label`, iOS `CFBundleDisplayName`, Windows pencere başlığı/ürün adı, web manifest.
+  Paket kimlikleri (applicationId, bundle id, exe adı) bilinçli olarak DEĞİŞTİRİLMEDİ; kurulu uygulamalar güncellenebilsin.

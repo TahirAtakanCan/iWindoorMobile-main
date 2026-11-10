@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Pervaz marka renkleri -->
+    <color name="ic_launcher_background">#0F4C5C</color>
+    <color name="pervaz_splash_bg">#F4F7F7</color>
+</resources>

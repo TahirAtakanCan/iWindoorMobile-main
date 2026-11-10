@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
+import '../widgets/brand_logo.dart';
 import '../services/auth_service.dart';
 import 'home_screen.dart';
 import 'register_screen.dart';
@@ -79,13 +81,7 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.window, size: 80, color: Colors.blueAccent),
-                const SizedBox(height: 20),
-                const Text(
-                  'iWindoor',
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.blueAccent),
-                ),
-                const Text('Pencere Tasarım Sistemi', style: TextStyle(color: Colors.grey)),
+                const BrandLogo(size: 104, direction: Axis.vertical, showTagline: true),
                 const SizedBox(height: 40),
                 TextField(
                   controller: _emailController,
@@ -113,7 +109,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _login,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueAccent,
+                      backgroundColor: Brand.petrol,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     child: _isLoading

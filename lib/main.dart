@@ -6,6 +6,8 @@ import 'services/offline/connectivity_state.dart';
 import 'services/offline/survey_outbox.dart';
 import 'config/app_config.dart';
 import 'widgets/offline_banner.dart';
+import 'theme/app_theme.dart';
+import 'widgets/brand_logo.dart';
 
 /// Pencere hemen açılır (Windows'ta pencere ilk kare çizilince görünür).
 /// Ayarlar ve oturum durumu açılış ekranında okunur; hata olursa ekranda yazılır.
@@ -20,14 +22,9 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'iWindoor',
+      title: Brand.appName,
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueAccent),
-        useMaterial3: true,
-        // Masaüstünde fare ile daha sık yerleşim
-        visualDensity: AppConfig.isDesktop ? VisualDensity.compact : VisualDensity.standard,
-      ),
+      theme: AppTheme.light(),
       builder: (context, child) {
         return Column(
           children: [
@@ -93,9 +90,9 @@ class _BootstrapState extends State<_Bootstrap> {
       return const Scaffold(
         body: Center(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 12),
-            Text('Başlatılıyor…'),
+            BrandLogo(size: 96, direction: Axis.vertical, showTagline: true),
+            SizedBox(height: 28),
+            SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 3)),
           ]),
         ),
       );

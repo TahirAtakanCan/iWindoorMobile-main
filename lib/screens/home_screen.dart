@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
+import '../widgets/brand_logo.dart';
 import '../models/customer.dart';
 import '../models/dashboard.dart';
 import '../services/api_service.dart';
@@ -261,7 +263,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("iWindoor Projelerim"),
+        title: const Row(mainAxisSize: MainAxisSize.min, children: [
+          BrandLogo.mark(size: 30),
+          SizedBox(width: 10),
+          Text('Projelerim'),
+        ]),
         centerTitle: true,
         elevation: 2,
         actions: [
@@ -293,10 +299,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 backgroundColor: Colors.white,
                 child: Text(
                   _userName.isNotEmpty ? _userName[0].toUpperCase() : "A",
-                  style: TextStyle(fontSize: 24, color: Colors.blue.shade800),
+                  style: const TextStyle(fontSize: 24, color: Brand.petrol, fontWeight: FontWeight.bold),
                 ),
               ),
-              decoration: BoxDecoration(color: Colors.blue.shade800),
+              decoration: const BoxDecoration(gradient: Brand.gradient),
             ),
             ListTile(
               leading: const Icon(Icons.people_outline),
@@ -347,9 +353,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.pop(context);
                 showAboutDialog(
                   context: context,
-                  applicationName: "iWindoor Mobile",
+                  applicationName: Brand.appName,
                   applicationVersion: "1.0.0",
-                  children: [const Text("Profesyonel Pencere ve Kapı Çizim Sistemi.")],
+                  applicationIcon: const BrandLogo.mark(size: 48),
+                  children: [const Text("PVC ve alüminyum pencere, kapı tasarımı; teklif, üretim ve iş takibi.")],
                 );
               },
             ),

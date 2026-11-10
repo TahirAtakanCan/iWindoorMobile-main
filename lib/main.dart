@@ -8,6 +8,7 @@ import 'config/app_config.dart';
 import 'widgets/offline_banner.dart';
 import 'theme/app_theme.dart';
 import 'widgets/brand_logo.dart';
+import 'services/session_guard.dart';
 
 /// Pencere hemen açılır (Windows'ta pencere ilk kare çizilince görünür).
 /// Ayarlar ve oturum durumu açılış ekranında okunur; hata olursa ekranda yazılır.
@@ -22,6 +23,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: SessionGuard.navigatorKey,
       title: Brand.appName,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),

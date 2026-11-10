@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../../config/app_config.dart';
 import '../auth_service.dart';
+import '../session_guard.dart';
 import 'connectivity_state.dart';
 import 'offline_interceptor.dart';
 import 'response_cache.dart';
@@ -28,6 +29,13 @@ Dio createApiDio({
     final token = await AuthService().getToken();
     if (token != null) options.headers['Authorization'] = 'Bearer $token';
     handler.next(options);
+  }, onError: (err, handler) {
+    // Süresi dolmuş / geçersiz oturum: giriş ekranına dön (giriş ve kayıt istekleri hariç).
+    final path = err.requestOptions.path;
+    if (err.response?.statusCode == 401 && !path.contains('/auth/')) {
+      SessionGuard.onUnauthorized();
+    }
+    handler.next(err);
   }));
 
   if (enableOffline) {

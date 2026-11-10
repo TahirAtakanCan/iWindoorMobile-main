@@ -289,6 +289,41 @@ class DesignController extends ChangeNotifier {
     _commit(r.design, select: selectedId);
   }
 
+  String? setShape(FrameShape shape) {
+    final frameId = isCoupled ? selectedFrameId : null;
+    final r = DesignOps.setShape(_design, shape, frameId: frameId);
+    if (r.error != null) return r.error;
+    _commit(r.design, select: selectedId);
+    return null;
+  }
+
+  String? addArchTop() {
+    final frameId = isCoupled ? selectedFrameId : null;
+    final r = DesignOps.addArchTop(_design, frameId: frameId);
+    if (r.error != null) return r.error;
+    _commit(r.design, select: r.selectedId ?? selectedId);
+    return null;
+  }
+
+  FrameShape get activeShape {
+    if (!isCoupled) return _design.shape;
+    final id = selectedFrameId;
+    if (id == null) return const RectShape();
+    final f = DesignOps.find(_design.root, id);
+    return f is FrameNode ? f.shape : const RectShape();
+  }
+
+  String? get selectedFrameId {
+    final id = selectedId;
+    if (id == null || !isCoupled) return null;
+    DesignNode? n = DesignOps.find(_design.root, id);
+    while (n != null) {
+      if (n is FrameNode) return n.id;
+      n = DesignOps.parentOf(_design.root, n.id);
+    }
+    return null;
+  }
+
   List<FrameNode> get frames {
     final root = _design.root;
     if (root is CoupleNode) return root.children;

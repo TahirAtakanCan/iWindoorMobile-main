@@ -9,4 +9,5 @@ export 'src/layout_engine.dart';
 export 'src/legacy.dart';
 export 'src/model.dart';
 export 'src/profile_resolver.dart';
+export 'src/shape_geometry.dart';
 export 'src/templates.dart';

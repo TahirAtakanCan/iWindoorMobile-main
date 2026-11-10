@@ -120,6 +120,7 @@ class WorkshopPdf {
     final glasses = bom.where((l) => l.group == BomGroup.glass || l.group == BomGroup.panel).toList();
     final hardware = bom.where((l) => l.group == BomGroup.hardware).toList();
     final screens = bom.where((l) => l.group == BomGroup.screen).toList();
+    final shapedGlass = glasses.where((l) => l.shape != null && l.shape != 'rect').toList();
     final issues = checkDesign(p.layout, p.series.geometry, p.design);
     final colorLabel = p.colorName ?? (p.design.colorCode == 'white' ? 'Beyaz' : p.design.colorCode);
 
@@ -153,13 +154,14 @@ class WorkshopPdf {
       ],
       ..._sectionTable(
         'Kesim listesi',
-        const ['Parça', 'Ölçü (mm)', 'Kesim', 'Adet', 'Toplam'],
+        const ['Parça', 'Ölçü (mm)', 'Kesim', 'Not', 'Adet', 'Toplam'],
         [
           for (final l in cutRows)
             [
               l.label,
               l.length != null ? '${l.length!.round()}' : '—',
               l.cut ?? '—',
+              cutLineNote(l),
               '${l.qty}',
               '${l.qty * p.unit.quantity}',
             ],
@@ -169,18 +171,26 @@ class WorkshopPdf {
       pw.SizedBox(height: 8),
       ..._sectionTable(
         'Cam / panel',
-        const ['Kod', 'Ölçü', 'Adet', 'Toplam'],
+        const ['Kod', 'Ölçü', 'Şekil', 'Adet', 'Toplam'],
         [
           for (final l in glasses)
             [
               l.glassCode ?? '',
               (l.w != null && l.h != null) ? '${l.w!.round()}×${l.h!.round()}' : '—',
+              glassShapeTr(l.shape),
               '${l.qty}',
               '${l.qty * p.unit.quantity}',
             ],
         ],
         PdfColors.teal700,
       ),
+      if (shapedGlass.isNotEmpty) ...[
+        pw.SizedBox(height: 6),
+        pw.Text(
+          '⚠ Şekilli camlar için şablon gerekir.',
+          style: const pw.TextStyle(fontSize: 9, color: PdfColors.orange800),
+        ),
+      ],
       pw.SizedBox(height: 8),
       ..._sectionTable(
         'Donanım',

@@ -340,6 +340,15 @@ void _bar(PdfGraphics c, _Xform xf, BarRect b, PdfColor fill, PdfColor stroke, d
   c.strokePath();
 }
 
+void _polyPath(PdfGraphics c, _Xform xf, List<Pt> pts) {
+  if (pts.isEmpty) return;
+  c.moveTo(xf.x(pts.first.x), xf.y(pts.first.y));
+  for (final p in pts.skip(1)) {
+    c.lineTo(xf.x(p.x), xf.y(p.y));
+  }
+  c.closePath();
+}
+
 void _glass(
   PdfGraphics c,
   _Xform xf,
@@ -355,11 +364,21 @@ void _glass(
   final w = wMm * xf.k, h = hMm * xf.k;
   final look = g.fill == FillType.panel ? GlassLook.panelLook : lookOf(g.glassCode);
   final mid = _pdf(look.gradient[look.gradient.length ~/ 2]);
+  final clip = g.clip;
+
+  void fillShape() {
+    if (clip != null && clip.length >= 3) {
+      _polyPath(c, xf, clip);
+      c.fillPath();
+    } else {
+      c.drawRect(l, bottom, w, h);
+      c.fillPath();
+    }
+  }
 
   if (look.panel) {
     c.setFillColor(_pdf(look.gradient.first));
-    c.drawRect(l, bottom, w, h);
-    c.fillPath();
+    fillShape();
     c.setStrokeColor(const PdfColor(0.604, 0.639, 0.663));
     c.setLineWidth(hair);
     for (var yMm = box.t + 60; yMm < box.b; yMm += 60) {
@@ -369,23 +388,30 @@ void _glass(
       c.strokePath();
     }
     c.setStrokeColor(stroke);
-    c.drawRect(l, bottom, w, h);
-    c.strokePath();
+    if (clip != null && clip.length >= 3) {
+      _polyPath(c, xf, clip);
+      c.strokePath();
+    } else {
+      c.drawRect(l, bottom, w, h);
+      c.strokePath();
+    }
     return;
   }
 
   if (look.frosted) {
     c.setFillColor(_mixWhite(mid, 0.55));
-    c.drawRect(l, bottom, w, h);
-    c.fillPath();
+    fillShape();
   } else {
     c.setFillColor(mid);
-    c.drawRect(l, bottom, w, h);
-    c.fillPath();
+    fillShape();
   }
 
   c.saveContext();
-  c.drawRect(l, bottom, w, h);
+  if (clip != null && clip.length >= 3) {
+    _polyPath(c, xf, clip);
+  } else {
+    c.drawRect(l, bottom, w, h);
+  }
   c.clipPath();
 
   if (look.reflection > 0 && !look.frosted) {

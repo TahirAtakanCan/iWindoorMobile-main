@@ -67,6 +67,7 @@ class _CutListSheetState extends State<CutListSheet> {
                       DataColumn(label: Text('Parça')),
                       DataColumn(label: Text('Ölçü (mm)'), numeric: true),
                       DataColumn(label: Text('Kesim')),
+                      DataColumn(label: Text('Not')),
                       DataColumn(label: Text('Adet'), numeric: true),
                     ],
                     rows: [
@@ -75,6 +76,7 @@ class _CutListSheetState extends State<CutListSheet> {
                           DataCell(Text(l.label)),
                           DataCell(Text(l.length?.round().toString() ?? '—')),
                           DataCell(Text(l.cut ?? '—')),
+                          DataCell(Text(cutLineNote(l))),
                           DataCell(Text('${l.qty}')),
                         ]),
                     ],
@@ -95,6 +97,7 @@ class _CutListSheetState extends State<CutListSheet> {
                     columns: const [
                       DataColumn(label: Text('Kod')),
                       DataColumn(label: Text('Ölçü (mm)')),
+                      DataColumn(label: Text('Şekil')),
                       DataColumn(label: Text('Adet'), numeric: true),
                     ],
                     rows: [
@@ -102,6 +105,7 @@ class _CutListSheetState extends State<CutListSheet> {
                         DataRow(cells: [
                           DataCell(Text(l.glassCode ?? '—')),
                           DataCell(Text('${l.w!.round()} × ${l.h!.round()}')),
+                          DataCell(Text(glassShapeTr(l.shape))),
                           DataCell(Text('${l.qty}')),
                         ]),
                     ],

@@ -142,6 +142,7 @@ class DesignOps {
           bottom: f.bottom,
           height: f.height,
           width: f.width,
+          shape: f.shape,
           child: replace(f.child, id, r),
         ),
       SplitNode s => SplitNode(
@@ -449,6 +450,81 @@ class DesignOps {
 
   static EditResult setBottom(WindowDesign d, BottomKind bottom) =>
       EditResult(d.copyWith(bottom: bottom), null);
+
+  static String? _shapeContentError(FrameShape shape, DesignNode root) {
+    if (shape.isRect) return null;
+    if (shape is TriangleShape && root is! FillNode) {
+      return 'Üçgen pencerede yalnızca sabit cam olabilir.';
+    }
+    if (shape is! TriangleShape) {
+      final ok = root is FillNode ||
+          (root is SplitNode && root.dir == SplitDir.h && root.children.isNotEmpty && root.children.first is FillNode);
+      if (!ok) {
+        return 'Şekilli kasada içerik tek cam veya üstte cam + altta dikdörtgen bölme olmalıdır.';
+      }
+    }
+    return null;
+  }
+
+  /// Tek kasa veya couple içindeki [frameId] için dış şekli değiştirir.
+  static EditResult setShape(WindowDesign d, FrameShape shape, {String? frameId}) {
+    if (frameId == null || d.root is! CoupleNode) {
+      final err = _shapeContentError(shape, d.root);
+      if (err != null) return EditResult(d, null, error: err);
+      return EditResult(d.copyWith(shape: shape), null);
+    }
+    final frame = find(d.root, frameId);
+    if (frame is! FrameNode) return EditResult(d, frameId);
+    final err = _shapeContentError(shape, frame.child);
+    if (err != null) return EditResult(d, frameId, error: err);
+    return EditResult(d.copyWith(root: replace(d.root, frameId, frame.copyWith(shape: shape))), frameId);
+  }
+
+  /// Kemerli üst: arch şekli + yatay bölme (üst sabit cam, alt mevcut içerik).
+  static EditResult addArchTop(WindowDesign d, {String? frameId}) {
+    const shape = ArchShape();
+  final double w;
+    final double h;
+    final DesignNode inner;
+    if (frameId != null) {
+      final frame = find(d.root, frameId);
+      if (frame is! FrameNode) return EditResult(d, frameId);
+      w = frame.width ?? d.width;
+      h = frame.height ?? d.height;
+      inner = frame.child;
+    } else {
+      w = d.width;
+      h = d.height;
+      inner = d.root;
+    }
+    if (h < w / 2 + 200) {
+      return EditResult(d, frameId, error: 'Kemer için yükseklik yetersiz.');
+    }
+    final rise = w / 2;
+    final ids = _nextIds(d.root, 3);
+    final topFill = FillNode(id: ids[1], glassCode: _defaultGlass(inner));
+    final split = SplitNode(
+      id: ids[0],
+      dir: SplitDir.h,
+      sizes: [rise, h - rise],
+      children: [topFill, inner],
+    );
+    if (frameId != null) {
+      final frame = find(d.root, frameId)! as FrameNode;
+      return EditResult(
+        d.copyWith(root: replace(d.root, frameId, frame.copyWith(shape: shape, child: split))),
+        topFill.id,
+      );
+    }
+    return EditResult(d.copyWith(shape: shape, root: split), topFill.id);
+  }
+
+  static String _defaultGlass(DesignNode root) {
+    for (final f in fills(root)) {
+      if (f.glassCode.isNotEmpty) return f.glassCode;
+    }
+    return '';
+  }
 
   // ---------------- birleşik kasa ----------------
 

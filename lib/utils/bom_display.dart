@@ -34,11 +34,23 @@ List<BomLine> workshopCutLines(Iterable<BomLine> bom) {
   final map = <String, BomLine>{};
   final order = <String>[];
   for (final l in raw) {
-    final key = '${l.label}|${l.length?.toStringAsFixed(1)}|${l.cut ?? ''}';
+    final key =
+        '${l.label}|${l.length?.toStringAsFixed(1)}|${l.cut ?? ''}|${l.bent}|${l.radius?.toStringAsFixed(1)}';
     final prev = map[key];
     if (prev == null) {
       map[key] = l;
       order.add(key);
+    } else if (prev.bent && prev.radius != null) {
+      map[key] = BomLine.barBent(
+        prev.group,
+        prev.label,
+        prev.length,
+        prev.cut,
+        prev.qty + l.qty,
+        prev.radius!,
+        role: prev.role,
+        glassCode: prev.glassCode,
+      );
     } else {
       map[key] = BomLine.bar(prev.group, prev.label, prev.length, prev.cut, prev.qty + l.qty, role: prev.role);
     }

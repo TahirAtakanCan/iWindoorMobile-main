@@ -228,39 +228,65 @@ class DesignPainter extends CustomPainter {
     }
   }
 
+  Path? _glassClipPath(GlassPrim g) {
+    final clip = g.clip;
+    if (clip == null || clip.length < 3) return null;
+    return Path()..addPolygon([for (final p in clip) Offset(p.x, p.y)], true);
+  }
+
   // --- cam: degrade + çapraz parlama şeritleri (clip ile) ---
   void _glass(Canvas c, GlassPrim g, double hair) {
     final r = Rect.fromLTRB(g.visible.l, g.visible.t, g.visible.r, g.visible.b);
     if (r.width <= 0 || r.height <= 0) return;
     final look = g.fill == FillType.panel ? GlassLook.panelLook : lookOf(g.glassCode);
+    final clipPath = _glassClipPath(g);
+
+    void fillGlass(Paint paint) {
+      if (clipPath != null) {
+        c.drawPath(clipPath, paint);
+      } else {
+        c.drawRect(r, paint);
+      }
+    }
 
     if (look.panel) {
-      c.drawRect(
-          r,
-          Paint()
-            ..shader = LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: look.gradient,
-            ).createShader(r));
+      fillGlass(Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: look.gradient,
+        ).createShader(r));
+      c.save();
+      if (clipPath != null) {
+        c.clipPath(clipPath);
+      } else {
+        c.clipRect(r);
+      }
       for (var y = r.top + 60; y < r.bottom; y += 60) {
         c.drawLine(Offset(r.left, y), Offset(r.right, y), _stroke(const Color(0xFF9AA3A9), hair));
       }
-      c.drawRect(r, _stroke(color.stroke, hair));
+      c.restore();
+      if (clipPath != null) {
+        c.drawPath(clipPath, _stroke(color.stroke, hair));
+      } else {
+        c.drawRect(r, _stroke(color.stroke, hair));
+      }
       return;
     }
 
-    c.drawRect(
-        r,
-        Paint()
-          ..shader = LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: look.gradient,
-          ).createShader(r));
+    fillGlass(Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: look.gradient,
+      ).createShader(r));
 
     c.save();
-    c.clipRect(r);
+    if (clipPath != null) {
+      c.clipPath(clipPath);
+    } else {
+      c.clipRect(r);
+    }
     if (look.reflection > 0) {
       final k = math.min(r.height * .55, r.width * .9);
       Path band(double a, double t) => Path()
@@ -316,7 +342,11 @@ class DesignPainter extends CustomPainter {
       dashed(inner.bottomLeft, inner.topLeft);
     }
     c.restore();
-    c.drawRect(r, _stroke(const Color(0xFF5F8AA6), .8 * hair));
+    if (clipPath != null) {
+      c.drawPath(clipPath, _stroke(const Color(0xFF5F8AA6), .8 * hair));
+    } else {
+      c.drawRect(r, _stroke(const Color(0xFF5F8AA6), .8 * hair));
+    }
   }
 
   // --- ölçüler: zincir (kayıt eksenleri / kasa sınırları) + toplam ---

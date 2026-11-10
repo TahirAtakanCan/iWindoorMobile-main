@@ -28,6 +28,82 @@ enum SlideMove { left, right, fixed }
 /// Sineklik türü.
 enum ScreenKind { plise, hinged, sliding }
 
+/// Üçgen alınlık tepe konumu.
+enum TriangleApex { left, center, right }
+
+/// Kasa dış şekli. [RectShape] JSON'da yazılmaz.
+sealed class FrameShape {
+  const FrameShape();
+
+  bool get isRect => this is RectShape;
+
+  Map<String, dynamic>? toJson();
+
+  static FrameShape fromJson(Object? raw) {
+    if (raw == null) return const RectShape();
+    if (raw is! Map) return const RectShape();
+    final j = Map<String, dynamic>.from(raw);
+    switch (j['type']) {
+      case 'arch':
+        return const ArchShape();
+      case 'segmentArch':
+        return SegmentArchShape(rise: _d(j['rise'], 100));
+      case 'trapezoid':
+        return TrapezoidShape(
+          leftHeight: _d(j['leftHeight'], 1000),
+          rightHeight: _d(j['rightHeight'], 1000),
+        );
+      case 'triangle':
+        final a = '${j['apex'] ?? 'center'}'.toLowerCase();
+        final apex = a == 'left'
+            ? TriangleApex.left
+            : a == 'right'
+                ? TriangleApex.right
+                : TriangleApex.center;
+        return TriangleShape(apex: apex);
+      default:
+        return const RectShape();
+    }
+  }
+}
+
+class RectShape extends FrameShape {
+  const RectShape();
+  @override
+  Map<String, dynamic>? toJson() => null;
+}
+
+class ArchShape extends FrameShape {
+  const ArchShape();
+  @override
+  Map<String, dynamic>? toJson() => {'type': 'arch'};
+}
+
+class SegmentArchShape extends FrameShape {
+  final double rise;
+  const SegmentArchShape({required this.rise});
+  @override
+  Map<String, dynamic>? toJson() => {'type': 'segmentArch', 'rise': rise};
+}
+
+class TrapezoidShape extends FrameShape {
+  final double leftHeight, rightHeight;
+  const TrapezoidShape({required this.leftHeight, required this.rightHeight});
+  @override
+  Map<String, dynamic>? toJson() => {
+        'type': 'trapezoid',
+        'leftHeight': leftHeight,
+        'rightHeight': rightHeight,
+      };
+}
+
+class TriangleShape extends FrameShape {
+  final TriangleApex apex;
+  const TriangleShape({this.apex = TriangleApex.center});
+  @override
+  Map<String, dynamic>? toJson() => {'type': 'triangle', 'apex': apex.name};
+}
+
 double _d(Object? v, [double def = 0]) => v is num ? v.toDouble() : def;
 int _i(Object? v, [int def = 1]) => v is num ? v.toInt() : def;
 
@@ -107,6 +183,7 @@ sealed class DesignNode {
           bottom: j['bottom'] == 'threshold' ? BottomKind.threshold : BottomKind.frame,
           height: j['height'] is num ? (j['height'] as num).toDouble() : null,
           width: j['width'] is num ? (j['width'] as num).toDouble() : null,
+          shape: FrameShape.fromJson(j['shape']),
           child: DesignNode.fromJson(Map<String, dynamic>.from(j['child'] as Map)),
         );
       case 'glass':
@@ -166,6 +243,7 @@ class FrameNode extends DesignNode {
   final BottomKind bottom;
   final double? height;
   final double? width;
+  final FrameShape shape;
   final DesignNode child;
 
   const FrameNode({
@@ -174,6 +252,7 @@ class FrameNode extends DesignNode {
     this.bottom = BottomKind.frame,
     this.height,
     this.width,
+    this.shape = const RectShape(),
   }) : super(id);
 
   FrameNode copyWith({
@@ -181,6 +260,7 @@ class FrameNode extends DesignNode {
     BottomKind? bottom,
     double? height,
     double? width,
+    FrameShape? shape,
     DesignNode? child,
     bool clearHeight = false,
     bool clearWidth = false,
@@ -190,6 +270,7 @@ class FrameNode extends DesignNode {
         bottom: bottom ?? this.bottom,
         height: clearHeight ? null : (height ?? this.height),
         width: clearWidth ? null : (width ?? this.width),
+        shape: shape ?? this.shape,
         child: child ?? this.child,
       );
 
@@ -200,6 +281,7 @@ class FrameNode extends DesignNode {
         if (bottom != BottomKind.frame) 'bottom': 'threshold',
         if (height != null) 'height': height,
         if (width != null) 'width': width,
+        if (shape.toJson() != null) 'shape': shape.toJson(),
         'child': child.toJson(),
       };
 }
@@ -425,6 +507,8 @@ class WindowDesign {
   final String colorCode;
   final DesignNode root;
   final BottomKind bottom;
+  /// Tek kasalı tasarımın dış şekli (couple'da her [FrameNode.shape] ayrı).
+  final FrameShape shape;
 
   const WindowDesign({
     required this.width,
@@ -433,21 +517,27 @@ class WindowDesign {
     this.seriesId,
     this.colorCode = 'white',
     this.bottom = BottomKind.frame,
+    this.shape = const RectShape(),
   });
 
-  /// Yeni özelliklerden hiçbiri yoksa 1, varsa 2. Couple her zaman 2.
+  /// Yeni özelliklerden hiçbiri yoksa 1, varsa 2. Couple / şekil her zaman 2.
   int get schemaVersion => _usesV2 ? 2 : 1;
 
   bool get _usesV2 {
     if (root is CoupleNode) return true;
     if (bottom != BottomKind.frame) return true;
+    if (!shape.isRect) return true;
     return _nodeUsesV2(root);
   }
 
   static bool _nodeUsesV2(DesignNode n) => switch (n) {
         CoupleNode _ => true,
         FrameNode f =>
-          f.bottom != BottomKind.frame || f.height != null || f.width != null || _nodeUsesV2(f.child),
+          !f.shape.isRect ||
+              f.bottom != BottomKind.frame ||
+              f.height != null ||
+              f.width != null ||
+              _nodeUsesV2(f.child),
         SplitNode s => s.joint != JointKind.mullion || s.children.any(_nodeUsesV2),
         SashNode s =>
           s.kind != SashKind.window || s.passive || s.outward || s.screen != null || _nodeUsesV2(s.child),
@@ -462,6 +552,7 @@ class WindowDesign {
     String? seriesId,
     String? colorCode,
     BottomKind? bottom,
+    FrameShape? shape,
   }) =>
       WindowDesign(
         width: width ?? this.width,
@@ -470,6 +561,7 @@ class WindowDesign {
         seriesId: seriesId ?? this.seriesId,
         colorCode: colorCode ?? this.colorCode,
         bottom: bottom ?? this.bottom,
+        shape: shape ?? this.shape,
       );
 
   Map<String, dynamic> toJson() => {
@@ -479,6 +571,7 @@ class WindowDesign {
         'series': seriesId,
         'color': colorCode,
         if (bottom != BottomKind.frame) 'bottom': 'threshold',
+        if (shape.toJson() != null) 'shape': shape.toJson(),
         'root': root.toJson(),
       };
 
@@ -488,6 +581,7 @@ class WindowDesign {
         seriesId: j['series']?.toString(),
         colorCode: (j['color'] as String?) ?? 'white',
         bottom: j['bottom'] == 'threshold' ? BottomKind.threshold : BottomKind.frame,
+        shape: FrameShape.fromJson(j['shape']),
         root: DesignNode.fromJson(Map<String, dynamic>.from(j['root'] as Map)),
       );
 

@@ -1,5 +1,7 @@
 // Ortak Türkçe biçimlendirme (ekran + PDF aynı kaynak).
 
+import 'package:windoor_core/windoor_core.dart';
+
 String _trNumber(num v, int fractionDigits) {
   final s = v.toStringAsFixed(fractionDigits);
   final parts = s.split('.');
@@ -67,6 +69,19 @@ String screenKindBomTr(String? kind) => switch ((kind ?? '').toUpperCase()) {
       'SLIDING' => 'Sürme',
       _ => kind ?? '—',
     };
+
+String glassShapeTr(String? shape) => switch ((shape ?? '').toLowerCase()) {
+      'arch' => 'Kemerli (şablon)',
+      'segmentarch' => 'Basık kemer (şablon)',
+      'trapezoid' => 'Eğik üst (şablon)',
+      'triangle' => 'Üçgen (şablon)',
+      _ => '',
+    };
+
+String cutLineNote(BomLine l) {
+  if (l.bent && l.radius != null) return 'Büküm R=${l.radius!.round()}';
+  return '';
+}
 
 String profileRoleTr(String? role) => switch ((role ?? '').toUpperCase()) {
       'FRAME' => 'Kasa',

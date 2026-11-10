@@ -69,6 +69,8 @@ class PropertiesPanel extends StatelessWidget {
                   },
                 ),
               ],
+              const SizedBox(height: 10),
+              _ShapeProps(c: c),
             ]),
             _FramesSection(c: c),
             if (c.selectedSlide != null) _SlideProps(c: c),
@@ -289,6 +291,172 @@ class _FrameTile extends StatelessWidget {
           ]),
         ]),
       ),
+    );
+  }
+}
+
+class _ShapeProps extends StatefulWidget {
+  final DesignController c;
+  const _ShapeProps({required this.c});
+
+  @override
+  State<_ShapeProps> createState() => _ShapePropsState();
+}
+
+class _ShapePropsState extends State<_ShapeProps> {
+  final _rise = TextEditingController();
+  final _hl = TextEditingController();
+  final _hr = TextEditingController();
+
+  @override
+  void dispose() {
+    _rise.dispose();
+    _hl.dispose();
+    _hr.dispose();
+    super.dispose();
+  }
+
+  String _kindOf(FrameShape s) => switch (s) {
+        RectShape _ => 'rect',
+        ArchShape _ => 'arch',
+        SegmentArchShape _ => 'segment',
+        TrapezoidShape _ => 'trap',
+        TriangleShape _ => 'tri',
+      };
+
+  void _apply(FrameShape shape) {
+    final err = widget.c.setShape(shape);
+    if (err != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.c;
+    final shape = c.activeShape;
+    final kind = _kindOf(shape);
+    if (shape is SegmentArchShape && _rise.text.isEmpty) {
+      _rise.text = shape.rise.round().toString();
+    }
+    if (shape is TrapezoidShape) {
+      if (_hl.text.isEmpty) _hl.text = shape.leftHeight.round().toString();
+      if (_hr.text.isEmpty) _hr.text = shape.rightHeight.round().toString();
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Şekil', style: Theme.of(context).textTheme.labelLarge),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            ChoiceChip(
+              label: const Text('Dikdörtgen'),
+              selected: kind == 'rect',
+              onSelected: (_) => _apply(const RectShape()),
+            ),
+            ChoiceChip(
+              label: const Text('Kemer'),
+              selected: kind == 'arch',
+              onSelected: (_) => _apply(const ArchShape()),
+            ),
+            ChoiceChip(
+              label: const Text('Basık kemer'),
+              selected: kind == 'segment',
+              onSelected: (_) {
+                final rise = double.tryParse(_rise.text) ?? 200;
+                _apply(SegmentArchShape(rise: rise));
+              },
+            ),
+            ChoiceChip(
+              label: const Text('Eğik üst'),
+              selected: kind == 'trap',
+              onSelected: (_) {
+                final hl = double.tryParse(_hl.text) ?? c.design.height;
+                final hr = double.tryParse(_hr.text) ?? c.design.height * 0.7;
+                _apply(TrapezoidShape(leftHeight: hl, rightHeight: hr));
+              },
+            ),
+            ChoiceChip(
+              label: const Text('Üçgen'),
+              selected: kind == 'tri',
+              onSelected: (_) => _apply(const TriangleShape()),
+            ),
+          ],
+        ),
+        if (kind == 'segment') ...[
+          const SizedBox(height: 8),
+          TextField(
+            controller: _rise,
+            decoration: const InputDecoration(labelText: 'Yay yüksekliği (mm)', border: OutlineInputBorder(), isDense: true),
+            keyboardType: TextInputType.number,
+            onSubmitted: (v) {
+              final rise = double.tryParse(v);
+              if (rise != null) _apply(SegmentArchShape(rise: rise));
+            },
+          ),
+        ],
+        if (kind == 'trap') ...[
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(
+              child: TextField(
+                controller: _hl,
+                decoration: const InputDecoration(labelText: 'Sol yükseklik', border: OutlineInputBorder(), isDense: true),
+                keyboardType: TextInputType.number,
+                onSubmitted: (_) {
+                  final hl = double.tryParse(_hl.text) ?? c.design.height;
+                  final hr = double.tryParse(_hr.text) ?? c.design.height * 0.7;
+                  _apply(TrapezoidShape(leftHeight: hl, rightHeight: hr));
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: _hr,
+                decoration: const InputDecoration(labelText: 'Sağ yükseklik', border: OutlineInputBorder(), isDense: true),
+                keyboardType: TextInputType.number,
+                onSubmitted: (_) {
+                  final hl = double.tryParse(_hl.text) ?? c.design.height;
+                  final hr = double.tryParse(_hr.text) ?? c.design.height * 0.7;
+                  _apply(TrapezoidShape(leftHeight: hl, rightHeight: hr));
+                },
+              ),
+            ),
+          ]),
+        ],
+        if (kind == 'tri') ...[
+          const SizedBox(height: 8),
+          DropdownButtonFormField<TriangleApex>(
+            key: ValueKey('apex-${shape is TriangleShape ? shape.apex : TriangleApex.center}'),
+            initialValue: shape is TriangleShape ? shape.apex : TriangleApex.center,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Tepe', border: OutlineInputBorder(), isDense: true),
+            items: const [
+              DropdownMenuItem(value: TriangleApex.left, child: Text('Sol')),
+              DropdownMenuItem(value: TriangleApex.center, child: Text('Orta')),
+              DropdownMenuItem(value: TriangleApex.right, child: Text('Sağ')),
+            ],
+            onChanged: (v) {
+              if (v != null) _apply(TriangleShape(apex: v));
+            },
+          ),
+        ],
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.architecture, size: 18),
+          label: const Text('Kemerli üst ekle'),
+          onPressed: () {
+            final err = c.addArchTop();
+            if (err != null && context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+            }
+          },
+        ),
+      ],
     );
   }
 }

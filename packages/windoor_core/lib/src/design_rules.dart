@@ -1,6 +1,9 @@
 // Seri limitlerine göre tasarım uyarı / hata kontrolü.
 
+import 'dart:math' as math;
+
 import 'catalog.dart';
+import 'edit_ops.dart';
 import 'layout_engine.dart';
 import 'model.dart';
 
@@ -149,10 +152,141 @@ List<RuleIssue> checkDesign(LayoutResult layout, SeriesGeometry s, [WindowDesign
   if (design != null) {
     _checkAdapterSplits(design.root, issues);
     _checkFrames(design, layout, s, issues);
+    _checkShapeDesign(design, s, issues, layout);
   }
 
   return issues;
 }
+
+void _checkShapeDesign(WindowDesign design, SeriesGeometry s, List<RuleIssue> issues, LayoutResult layout) {
+  if (design.root is CoupleNode) {
+    final c = design.root as CoupleNode;
+    for (final f in c.children) {
+      _checkShapeOnFrame(design.width, design.height, f.shape, f.id, f.child, s, issues);
+    }
+  } else if (!design.shape.isRect) {
+    _checkShapeOnFrame(design.width, design.height, design.shape, 'root', design.root, s, issues);
+  }
+
+  for (final g in layout.prims.whereType<GlassPrim>()) {
+    if (g.shapeType != null) {
+      final fill = _findFill(design.root, g.nodeId);
+      if (fill != null && (fill.duplexCols > 1 || fill.duplexRows > 1)) {
+        issues.add(RuleIssue(
+          [g.nodeId],
+          'Şekilli camda dubleks çıta kullanılamaz.',
+          false,
+        ));
+      }
+    }
+  }
+}
+
+FillNode? _findFill(DesignNode root, String id) {
+  for (final n in DesignOps.walk(root)) {
+    if (n is FillNode && n.id == id) return n;
+  }
+  return null;
+}
+
+void _checkShapeOnFrame(
+  double w,
+  double h,
+  FrameShape shape,
+  String frameId,
+  DesignNode content,
+  SeriesGeometry s,
+  List<RuleIssue> issues,
+) {
+  if (shape.isRect) return;
+  final ids = [frameId];
+
+  switch (shape) {
+    case ArchShape _:
+      if (h < w / 2 + 200) {
+        issues.add(RuleIssue(ids, 'Kemerli pencerede yükseklik en az W/2 + 200 mm olmalıdır.', true));
+      }
+    case SegmentArchShape seg:
+      if (seg.rise < 50 || seg.rise > w / 2) {
+        issues.add(RuleIssue(ids, 'Basık kemer yüksekliği 50 mm ile W/2 arasında olmalıdır.', true));
+      }
+    case TrapezoidShape t:
+      final minH = math.min(t.leftHeight, t.rightHeight);
+      if (minH < 2 * s.frameFace + 200) {
+        issues.add(RuleIssue(ids, 'Eğik üstte kısa yan en az ${(2 * s.frameFace + 200).round()} mm olmalıdır.', true));
+      }
+    case TriangleShape _:
+      if (h < 300 || w < 400) {
+        issues.add(RuleIssue(ids, 'Üçgen alınlık için min 400×300 mm gerekir.', true));
+      }
+    case RectShape _:
+      break;
+  }
+
+  _checkShapedContent(shape, content, ids, issues);
+}
+
+void _checkShapedContent(FrameShape shape, DesignNode node, List<String> frameIds, List<RuleIssue> issues) {
+  if (shape is TriangleShape) {
+    if (node is! FillNode) {
+      issues.add(RuleIssue(frameIds, 'Üçgen pencerede yalnızca sabit cam olabilir.', true));
+    }
+    return;
+  }
+
+  final allowed = switch (node) {
+    FillNode _ => true,
+    SplitNode s when s.dir == SplitDir.h && s.children.length >= 2 && s.children.first is FillNode => true,
+    _ => false,
+  };
+  if (!allowed) {
+    if (node is SashNode || node is SlideNode) {
+      issues.add(RuleIssue([node.id], 'Şekilli bölgede kanat kullanılamaz.', true));
+    } else {
+      issues.add(RuleIssue(
+        frameIds,
+        'Şekilli kasada içerik tek cam veya üstte cam + altta dikdörtgen bölge olmalıdır.',
+        true,
+      ));
+    }
+    return;
+  }
+
+  if (node is SplitNode) {
+    final top = node.children.first;
+    if (top is! FillNode) {
+      issues.add(RuleIssue([...frameIds, top.id], 'Şekilli bölge üstte sabit cam olmalıdır.', true));
+    }
+    _checkNoSashInShapedSubtree(top, issues);
+    for (var i = 1; i < node.children.length; i++) {
+      _checkShapedSubtreeClean(node.children[i], issues);
+    }
+  } else if (node is FillNode) {
+    _checkNoSashInShapedSubtree(node, issues);
+  }
+}
+
+void _checkNoSashInShapedSubtree(DesignNode node, List<RuleIssue> issues) {
+  switch (node) {
+    case SashNode s:
+      issues.add(RuleIssue([s.id], 'Şekilli bölgede kanat kullanılamaz.', true));
+    case SplitNode s when s.dir == SplitDir.v:
+      issues.add(RuleIssue([s.id], 'Şekilli bölgede dikey bölme kullanılamaz.', true));
+    case SplitNode s:
+      for (final c in s.children) {
+        _checkNoSashInShapedSubtree(c, issues);
+      }
+    case FillNode _:
+      break;
+    case SlideNode s:
+      issues.add(RuleIssue([s.id], 'Şekilli bölgede kanat kullanılamaz.', true));
+    case FrameNode _:
+    case CoupleNode _:
+      break;
+  }
+}
+
+void _checkShapedSubtreeClean(DesignNode node, List<RuleIssue> issues) {}
 
 void _checkFrames(WindowDesign design, LayoutResult layout, SeriesGeometry s, List<RuleIssue> issues) {
   final minSize = 2 * s.frameFace + 100;

@@ -4,6 +4,7 @@
 import 'dart:math' as math;
 import 'catalog.dart';
 import 'model.dart';
+import 'shape_geometry.dart';
 
 // ---------- basit geometri ----------
 class Pt {
@@ -56,8 +57,18 @@ class GlassPrim extends Prim {
   final double cutW, cutH; // cam kesim ölçüsü (BOM GLASS/PANEL ile aynı, mm)
   final String glassCode;
   final FillType fill;
-  const GlassPrim(this.nodeId, this.visible, this.cutW, this.cutH, this.glassCode, this.fill)
-      : super(DrawLayer.glass);
+  final List<Pt>? clip;
+  final String? shapeType;
+  const GlassPrim(
+    this.nodeId,
+    this.visible,
+    this.cutW,
+    this.cutH,
+    this.glassCode,
+    this.fill, {
+    this.clip,
+    this.shapeType,
+  }) : super(DrawLayer.glass);
 }
 
 class PolylinePrim extends Prim {
@@ -82,7 +93,8 @@ class TextPrim extends Prim {
 class HitArea {
   final String nodeId;
   final Box box;
-  const HitArea(this.nodeId, this.box);
+  final List<Pt>? polygon;
+  const HitArea(this.nodeId, this.box, {this.polygon});
 }
 
 // ---------- kesim listesi (backend BomPricer biçimi) ----------
@@ -102,19 +114,57 @@ class BomLine {
   final String? kind; // donanım: TURN | TILT | TILT_TURN | SLIDE | PASSIVE | DOOR | DOOR_PASSIVE
   final String? colorCode;
   final int qty;
+  final bool bent;
+  final double? radius;
+  final String? shape;
 
-  const BomLine.bar(this.group, this.label, this.length, this.cut, this.qty, {this.role, this.glassCode})
-      : w = null,
+  const BomLine.bar(
+    this.group,
+    this.label,
+    this.length,
+    this.cut,
+    this.qty, {
+    this.role,
+    this.glassCode,
+    this.bent = false,
+    this.radius,
+    this.shape,
+  })  : w = null,
         h = null,
         kind = null,
         colorCode = null;
 
-  const BomLine.sheet(this.group, this.label, this.w, this.h, this.qty, {required this.glassCode})
-      : length = null,
+  BomLine.barBent(
+    this.group,
+    this.label,
+    this.length,
+    this.cut,
+    this.qty,
+    this.radius, {
+    this.role,
+    this.glassCode,
+  })  : w = null,
+        h = null,
+        kind = null,
+        colorCode = null,
+        bent = true,
+        shape = null;
+
+  const BomLine.sheet(
+    this.group,
+    this.label,
+    this.w,
+    this.h,
+    this.qty, {
+    required this.glassCode,
+    this.shape,
+  })  : length = null,
         cut = null,
         role = null,
         kind = null,
-        colorCode = null;
+        colorCode = null,
+        bent = false,
+        radius = null;
 
   const BomLine.hardware(this.kind, this.w, this.h, this.qty)
       : group = BomGroup.hardware,
@@ -123,7 +173,10 @@ class BomLine {
         cut = null,
         role = null,
         glassCode = null,
-        colorCode = null;
+        colorCode = null,
+        bent = false,
+        radius = null,
+        shape = null;
 
   const BomLine.color(this.colorCode)
       : group = BomGroup.color,
@@ -135,7 +188,10 @@ class BomLine {
         role = null,
         kind = null,
         glassCode = null,
-        qty = 1;
+        qty = 1,
+        bent = false,
+        radius = null,
+        shape = null;
 
   BomLine.screen(ScreenKind screenKind, this.w, this.h, this.qty)
       : group = BomGroup.screen,
@@ -149,7 +205,10 @@ class BomLine {
         cut = null,
         role = null,
         glassCode = null,
-        colorCode = null;
+        colorCode = null,
+        bent = false,
+        radius = null,
+        shape = null;
 
   bool get isBar => length != null;
   bool get isHardware => group == BomGroup.hardware;
@@ -180,11 +239,15 @@ class BomLine {
         if (h != null) 'h': _r1(h!),
         if (glassCode != null && glassCode!.isNotEmpty) 'glassCode': glassCode,
         if (cut != null) 'cut': cut,
+        if (bent) 'bent': true,
+        if (radius != null) 'radius': _r1(radius!),
+        if (shape != null) 'shape': shape,
         'qty': qty,
       };
 
-  String get _key => '${group.name}|${role?.name}|$kind|$colorCode|$label|${length?.toStringAsFixed(1)}|'
-      '${w?.toStringAsFixed(1)}|${h?.toStringAsFixed(1)}|$cut|$glassCode';
+  String get _key =>
+      '${group.name}|${role?.name}|$kind|$colorCode|$label|${length?.toStringAsFixed(1)}|'
+      '${w?.toStringAsFixed(1)}|${h?.toStringAsFixed(1)}|$cut|$glassCode|$bent|${radius?.toStringAsFixed(1)}|$shape';
 
   BomLine _withQty(int q) {
     if (isColor) return BomLine.color(colorCode);
@@ -197,8 +260,24 @@ class BomLine {
       };
       return BomLine.screen(sk, w!, h!, q);
     }
-    if (isBar) return BomLine.bar(group, label, length, cut, q, role: role, glassCode: glassCode);
-    return BomLine.sheet(group, label, w, h, q, glassCode: glassCode!);
+    if (isBar) {
+      if (bent) {
+        return BomLine.barBent(group, label, length, cut, q, radius!, role: role, glassCode: glassCode);
+      }
+      return BomLine.bar(
+        group,
+        label,
+        length,
+        cut,
+        q,
+        role: role,
+        glassCode: glassCode,
+        bent: bent,
+        radius: radius,
+        shape: shape,
+      );
+    }
+    return BomLine.sheet(group, label, w, h, q, glassCode: glassCode!, shape: shape);
   }
 
   static double _r1(double v) => (v * 10).roundToDouble() / 10;
@@ -262,7 +341,12 @@ class LayoutResult {
 
   String? hitTest(double x, double y) {
     for (final h in hits.reversed) {
-      if (h.box.contains(x, y)) return h.nodeId;
+      if (h.polygon != null) {
+        final poly = [for (final p in h.polygon!) ShapePt(p.x, p.y)];
+        if (pointInPolygon(x, y, poly)) return h.nodeId;
+      } else if (h.box.contains(x, y)) {
+        return h.nodeId;
+      }
     }
     return null;
   }
@@ -288,7 +372,11 @@ class LayoutEngine {
     } else {
       final outer = Box(0, 0, d.width, d.height);
       out.frames.add(FrameBox('root', outer));
-      _frame(out, outer, d.bottom, root);
+      if (d.shape.isRect) {
+        _frame(out, outer, d.bottom, root);
+      } else {
+        _shapedFrame(out, outer, d.bottom, d.shape, root, d.width, d.height);
+      }
     }
     if (d.colorCode != 'white' && d.colorCode.isNotEmpty) {
       out.bom.add(BomLine.color(d.colorCode));
@@ -311,7 +399,7 @@ class LayoutEngine {
         final box = Box(x, 0, x + w, h);
         boxes.add(box);
         out.frames.add(FrameBox(couple.children[i].id, box));
-        _frame(out, box, couple.children[i].bottom, couple.children[i].child);
+        _frameBody(out, box, couple.children[i].bottom, couple.children[i].shape, couple.children[i].child, w, h);
         x += w + gap;
       }
       for (var i = 0; i < n - 1; i++) {
@@ -340,7 +428,7 @@ class LayoutEngine {
         final box = Box(0, y, w, y + h);
         boxes.add(box);
         out.frames.add(FrameBox(couple.children[i].id, box));
-        _frame(out, box, couple.children[i].bottom, couple.children[i].child);
+        _frameBody(out, box, couple.children[i].bottom, couple.children[i].shape, couple.children[i].child, w, h);
         y += h + gap;
       }
       for (var i = 0; i < n - 1; i++) {
@@ -361,6 +449,213 @@ class LayoutEngine {
         ));
       }
     }
+  }
+
+  void _frameBody(
+    LayoutResult out,
+    Box outer,
+    BottomKind bottom,
+    FrameShape shape,
+    DesignNode child,
+    double w,
+    double h,
+  ) {
+    if (shape.isRect) {
+      _frame(out, outer, bottom, child);
+    } else {
+      _shapedFrame(out, outer, bottom, shape, child, w, h);
+    }
+  }
+
+  static List<Pt> _pts(List<ShapePt> poly) => [for (final p in poly) Pt(p.x, p.y)];
+
+  static Box _bounds(List<Pt> pts) {
+    var l = pts.first.x, r = pts.first.x, t = pts.first.y, b = pts.first.y;
+    for (final p in pts) {
+      if (p.x < l) l = p.x;
+      if (p.x > r) r = p.x;
+      if (p.y < t) t = p.y;
+      if (p.y > b) b = p.y;
+    }
+    return Box(l, t, r, b);
+  }
+
+  void _polyStrip(
+    LayoutResult out,
+    DrawLayer layer,
+    List<Pt> outer,
+    List<Pt> inner, {
+    int z = 0,
+    ProfileSide side = ProfileSide.top,
+  }) {
+    final n = outer.length;
+    for (var i = 0; i < n; i++) {
+      final j = (i + 1) % n;
+      out.prims.add(ProfilePoly(layer, [outer[i], outer[j], inner[j], inner[i]], side, z: z));
+    }
+  }
+
+  double _arcPhiDeg(double thetaRad) => round1(45 + degFromRad(thetaRad) / 4);
+
+  void _shapedFrameBom(LayoutResult out, FrameShape shape, double w, double h, ShapeOutline outline) {
+    final weld = s.weldAllowance;
+    switch (shape) {
+      case ArchShape _ || SegmentArchShape _:
+        final r = outline.leftSpringY;
+        final sideLen = (h - r) + weld;
+        final arcR = outline.arcRadius ?? w / 2;
+        final theta = outline.arcTheta ?? math.pi;
+        final arcLen = arcR * theta + 2 * weld;
+        final phi = _arcPhiDeg(theta);
+        final cutSide = formatCut(45, phi);
+        final cutArc = formatCut(phi, phi);
+        out.bom
+          ..add(BomLine.bar(BomGroup.profile, 'Kasa', w + 2 * weld, '45/45', 1, role: ProfileRole.frame))
+          ..add(BomLine.bar(BomGroup.profile, 'Kasa', sideLen, cutSide, 2, role: ProfileRole.frame))
+          ..add(BomLine.barBent(
+            BomGroup.profile,
+            'Kasa',
+            arcLen,
+            cutArc,
+            1,
+            arcR,
+            role: ProfileRole.frame,
+          ));
+      case TrapezoidShape t:
+        final hl = t.leftHeight, hr = t.rightHeight;
+        final dh = (hl - hr).abs();
+        final alpha = math.atan(dh / w);
+        final highLeft = hl >= hr;
+        final mHigh = round1((90 - degFromRad(alpha)) / 2);
+        final mLow = round1((90 + degFromRad(alpha)) / 2);
+        final topLen = math.sqrt(w * w + dh * dh) + 2 * weld;
+        final cutTop = highLeft ? formatCut(mHigh, mLow) : formatCut(mLow, mHigh);
+        final cutLeft = formatCut(45, highLeft ? mHigh : mLow);
+        final cutRight = formatCut(45, highLeft ? mLow : mHigh);
+        out.bom
+          ..add(BomLine.bar(BomGroup.profile, 'Kasa', w + 2 * weld, '45/45', 1, role: ProfileRole.frame))
+          ..add(BomLine.bar(BomGroup.profile, 'Kasa', hl + 2 * weld, cutLeft, 1, role: ProfileRole.frame))
+          ..add(BomLine.bar(BomGroup.profile, 'Kasa', hr + 2 * weld, cutRight, 1, role: ProfileRole.frame))
+          ..add(BomLine.bar(BomGroup.profile, 'Kasa', topLen, cutTop, 1, role: ProfileRole.frame));
+      case TriangleShape tri:
+        final run = tri.apex == TriangleApex.center ? w / 2 : w;
+        final baseHalf = math.atan(h / run);
+        final mBase = round1(degFromRad(baseHalf) / 2);
+        final mApex = round1((math.pi - 2 * baseHalf) / 2 * 180 / math.pi);
+        final slant = math.sqrt(run * run + h * h) + 2 * weld;
+        out.bom
+          ..add(BomLine.bar(BomGroup.profile, 'Kasa', w + 2 * weld, formatCut(mBase, mBase), 1, role: ProfileRole.frame))
+          ..add(BomLine.bar(BomGroup.profile, 'Kasa', slant, formatCut(mBase, mApex), 2, role: ProfileRole.frame));
+      case RectShape _:
+        break;
+    }
+  }
+
+  void _shapedFrame(LayoutResult out, Box outer, BottomKind bottom, FrameShape shape, DesignNode child, double w, double h) {
+    final outline = buildOutline(w, h, shape);
+    final outerPoly = _pts(outline.polygon());
+    final innerPoly = _pts(insetPolygon(w, h, shape, s.frameFace));
+    if (bottom == BottomKind.threshold) {
+      // şekilli eşik: alt dikdörtgen şerit + yanlar (üst şekil aynı)
+      final thrTop = outer.b - s.thresholdFace;
+      final thrInnerPoly = [
+        for (final p in innerPoly)
+          if (p.y >= thrTop - 0.01) p else Pt(p.x, thrTop),
+      ];
+      _polyStrip(out, DrawLayer.frame, outerPoly, thrInnerPoly);
+      out.prims.add(BarRect(
+        DrawLayer.frame,
+        Box(outer.l + s.frameFace, outer.b - s.thresholdFace, outer.r - s.frameFace, outer.b),
+        metallic: true,
+      ));
+      _shapedFrameBom(out, shape, w, h, outline);
+      _thresholdBom(out, outer);
+    } else {
+      _polyStrip(out, DrawLayer.frame, outerPoly, innerPoly);
+      _shapedFrameBom(out, shape, w, h, outline);
+    }
+    final innerBounds = _bounds(innerPoly);
+    final inner = Box(innerBounds.l, innerBounds.t, innerBounds.r, innerBounds.b);
+  final ref = outer;
+    _area(out, child, inner, ref, const _Edges.all(EdgeKind.frame), shape: shape, fullW: w, fullH: h);
+  }
+
+  void _shapedBeadBomFromEdges(LayoutResult out, List<ContourEdge> edges, {String glassCode = ''}) {
+    if (edges.isEmpty) return;
+    final miters = contourMiters(edges);
+    for (var i = 0; i < edges.length; i++) {
+      final e = edges[i];
+      final cut = contourEdgeCut(miters, i);
+      final len = round1(e.length);
+      if (e.bent && e.radius != null) {
+        out.bom.add(BomLine.barBent(
+          BomGroup.bead,
+          'Cam çıtası',
+          len,
+          cut,
+          1,
+          e.radius!,
+          glassCode: glassCode,
+        ));
+      } else {
+        out.bom.add(BomLine.bar(BomGroup.bead, 'Cam çıtası', len, cut, 1, glassCode: glassCode));
+      }
+    }
+  }
+
+  void _fillShaped(
+    LayoutResult out,
+    FillNode n,
+    FrameShape shape,
+    double fullW,
+    double fullH,
+    _Edges e, {
+    required Box region,
+  }) {
+    final cutY = region.b;
+    final fullInner = region.h >= fullH - 2 * s.frameFace - 1;
+
+    var beadEdges = buildInsetContourEdges(fullW, fullH, shape, s.frameFace);
+    if (!fullInner) beadEdges = clipContourMaxY(beadEdges, cutY);
+
+    var glassEdges = buildInsetContourEdges(fullW, fullH, shape, s.frameFace + s.beadFace);
+    if (!fullInner) glassEdges = clipContourMaxY(glassEdges, cutY - s.beadFace);
+
+    final beadOuter = _pts(edgesToPoints(beadEdges));
+    final glassPoly = _pts(edgesToPoints(glassEdges));
+    if (beadOuter.length >= 3 && glassPoly.length >= 3) {
+      _polyStrip(out, DrawLayer.bead, beadOuter, glassPoly);
+    }
+    _shapedBeadBomFromEdges(out, beadEdges, glassCode: n.glassCode);
+
+    if (glassPoly.length < 3) return;
+    final visBounds = _bounds(glassPoly);
+    final vis = Box(visBounds.l, visBounds.t, visBounds.r, visBounds.b);
+    final pay = s.frameFace - s.glassRebateFrame;
+    final gw = fullInner ? fullW - 2 * pay : region.w + s.rebateFor(e.l) + s.rebateFor(e.r);
+    final gh = fullInner ? fullH - 2 * pay : region.h + s.rebateFor(e.t) + s.rebateFor(e.b);
+    final shapeCode = frameShapeBomCode(shape);
+    out.prims.add(GlassPrim(
+      n.id,
+      vis,
+      gw,
+      gh,
+      n.glassCode,
+      n.fill,
+      clip: glassPoly,
+      shapeType: shapeCode,
+    ));
+    out.prims.add(TextPrim(DrawLayer.label, Pt(vis.cx, vis.cy), n.glassCode));
+    out.bom.add(BomLine.sheet(
+      n.fill == FillType.panel ? BomGroup.panel : BomGroup.glass,
+      n.fill == FillType.panel ? 'Panel' : 'Cam',
+      gw,
+      gh,
+      1,
+      glassCode: n.glassCode,
+      shape: shapeCode,
+    ));
+    out.hits.add(HitArea(n.id, vis, polygon: glassPoly));
   }
 
   /// Tek kasa gövdesi: eşik dahil. [outer] kasa dış kutusu.
@@ -427,13 +722,22 @@ class LayoutEngine {
   }
 
   /// [rect] net açıklık; [ref] referans çizgileri (kasa dışı veya kayıt ekseni) - ölçüler buna göre.
-  void _area(LayoutResult out, DesignNode node, Box rect, Box ref, _Edges edges) {
+  void _area(
+    LayoutResult out,
+    DesignNode node,
+    Box rect,
+    Box ref,
+    _Edges edges, {
+    FrameShape shape = const RectShape(),
+    double? fullW,
+    double? fullH,
+  }) {
     switch (node) {
       case CoupleNode _:
       case FrameNode _:
         break; // yalnızca root / couple çocukları; alan içinde beklenmez
       case SplitNode n:
-        _split(out, n, rect, ref, edges);
+        _split(out, n, rect, ref, edges, shape: shape, fullW: fullW, fullH: fullH);
       case SashNode n:
         final face = n.kind == SashKind.door ? s.doorSashFace : s.sashFace;
         final so = rect.inflate(s.sashLap);
@@ -497,11 +801,32 @@ class LayoutEngine {
           _area(out, panel.child, si, ref, const _Edges.all(EdgeKind.sash));
         }
       case FillNode n:
-        _fill(out, n, rect, edges);
+        if (!shape.isRect && fullW != null && fullH != null) {
+          final innerEdges = buildInsetContourEdges(fullW, fullH, shape, s.frameFace);
+          final innerTop = contourTopY(innerEdges);
+          // Üst kenarı kasa iç tepesine değen bölge şekillidir (alt sınırı serbest).
+          final shapedRegion = rect.t <= innerTop + 1;
+          if (shapedRegion) {
+            _fillShaped(out, n, shape, fullW, fullH, edges, region: rect);
+          } else {
+            _fill(out, n, rect, edges);
+          }
+        } else {
+          _fill(out, n, rect, edges);
+        }
     }
   }
 
-  void _split(LayoutResult out, SplitNode n, Box rect, Box ref, _Edges edges) {
+  void _split(
+    LayoutResult out,
+    SplitNode n,
+    Box rect,
+    Box ref,
+    _Edges edges, {
+    FrameShape shape = const RectShape(),
+    double? fullW,
+    double? fullH,
+  }) {
     final v = n.dir == SplitDir.v;
     final total = n.sizes.fold<double>(0, (a, b) => a + b);
     final r0 = v ? ref.l : ref.t;
@@ -559,7 +884,7 @@ class LayoutEngine {
           rightOuter = so;
         }
       }
-      _area(out, n.children[i], cr, cref, ce);
+      _area(out, n.children[i], cr, cref, ce, shape: shape, fullW: fullW, fullH: fullH);
     }
 
     if (adapter && centers.isNotEmpty) {

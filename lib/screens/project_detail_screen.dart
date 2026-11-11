@@ -17,6 +17,7 @@ import '../services/customer_api.dart';
 import '../services/design_api.dart';
 import '../services/pdf_service.dart';
 import '../services/project_file_api.dart';
+import '../theme/app_theme.dart';
 import '../utils/status.dart';
 import '../widgets/design_thumbnail.dart';
 import '../widgets/status_badge.dart';
@@ -47,6 +48,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   CatalogSnapshot? _catalog;
   PaymentsSummary? _payments;
   bool _isAdmin = false;
+  bool _paymentsExpanded = false;
 
   @override
   void initState() {
@@ -746,70 +748,171 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
+  Widget _projectSummary(Project project) {
+    final customer = (project.customerName ?? '').trim();
+    final desc = project.description.trim();
+    return Card(
+      margin: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+      color: Colors.white,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: Brand.petrol.withValues(alpha: 0.12)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (desc.isNotEmpty)
+              Text(
+                desc,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: Colors.grey.shade800, fontSize: 14),
+              ),
+            if (desc.isNotEmpty) const SizedBox(height: 8),
+            Row(
+              children: [
+                if (customer.isNotEmpty) ...[
+                  Icon(Icons.person_outline, size: 16, color: Brand.petrolLight),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      customer,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 13, color: Brand.ink),
+                    ),
+                  ),
+                ],
+                if (customer.isNotEmpty && project.deliveryDate != null) const SizedBox(width: 12),
+                if (project.deliveryDate != null) ...[
+                  Icon(Icons.event_outlined, size: 16, color: Brand.petrolLight),
+                  const SizedBox(width: 4),
+                  Text(
+                    formatDate(project.deliveryDate),
+                    style: const TextStyle(fontSize: 13, color: Brand.ink),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              formatMoney(project.displaySaleTotal),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Brand.petrol),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _paymentsSection(Project project) {
     final sum = _payments;
-    final target = sum?.targetTotal ?? project.collectionTarget;
     final paid = sum?.paidTotal ?? project.paidTotal;
     final balance = sum?.balance ?? project.balance;
     final items = sum?.items ?? const <Payment>[];
+    final paidOff = balance.abs() < 0.005;
 
     return Card(
-      margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Text('Tahsilat', style: Theme.of(context).textTheme.titleMedium),
-                const Spacer(),
-                TextButton(onPressed: () => _paymentDialog(project, refund: false), child: const Text('Ödeme al')),
-                TextButton(onPressed: () => _paymentDialog(project, refund: true), child: const Text('İade')),
-              ],
-            ),
-            Text('Hedef: ${formatMoney(target)} · Ödenen: ${formatMoney(paid)} · Kalan: ${formatMoney(balance)}',
-                style: const TextStyle(fontSize: 13)),
-            const Divider(),
-            if (items.isEmpty)
-              const Text('Ödeme yok.', style: TextStyle(color: Colors.grey))
-            else
-              ...items.map((p) {
-                final red = p.isRefund;
-                return ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(
-                    '${formatDate(p.paidAt)} · ${paymentMethodTr(p.method)}',
-                    style: TextStyle(color: red ? Colors.red : null),
+      margin: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+      color: Colors.white,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: Brand.petrol.withValues(alpha: 0.12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () => setState(() => _paymentsExpanded = !_paymentsExpanded),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Tahsilat · Ödenen ${formatMoney(paid)} / Kalan ${formatMoney(balance)}',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Brand.ink),
+                    ),
                   ),
-                  subtitle: (p.note ?? '').isEmpty ? null : Text(p.note!),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
+                  if (paidOff)
+                    Container(
+                      margin: const EdgeInsets.only(right: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.green.shade400),
+                      ),
+                      child: Text('Ödendi', style: TextStyle(fontSize: 11, color: Colors.green.shade800, fontWeight: FontWeight.w600)),
+                    ),
+                  Icon(_paymentsExpanded ? Icons.expand_less : Icons.expand_more, color: Brand.petrol),
+                ],
+              ),
+            ),
+          ),
+          if (_paymentsExpanded) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
                     children: [
-                      Text(
-                        formatMoney(p.signedAmount),
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: red ? Colors.red : Colors.green.shade800,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.receipt_long, size: 20),
-                        tooltip: 'Makbuz',
-                        onPressed: () => _shareReceipt(project, p),
-                      ),
-                      if (_isAdmin)
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
-                          onPressed: () => _deletePayment(project, p),
-                        ),
+                      TextButton(onPressed: () => _paymentDialog(project, refund: false), child: const Text('Ödeme al')),
+                      TextButton(onPressed: () => _paymentDialog(project, refund: true), child: const Text('İade')),
                     ],
                   ),
-                );
-              }),
+                  if (items.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(8, 4, 8, 8),
+                      child: Text('Ödeme yok.', style: TextStyle(color: Colors.grey)),
+                    )
+                  else
+                    ...items.map((p) {
+                      final red = p.isRefund;
+                      return ListTile(
+                        dense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                        title: Text(
+                          '${formatDate(p.paidAt)} · ${paymentMethodTr(p.method)}',
+                          style: TextStyle(color: red ? Colors.red : null),
+                        ),
+                        subtitle: (p.note ?? '').isEmpty ? null : Text(p.note!),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              formatMoney(p.signedAmount),
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: red ? Colors.red : Brand.petrol,
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.receipt_long, size: 20),
+                              tooltip: 'Makbuz',
+                              onPressed: () => _shareReceipt(project, p),
+                            ),
+                            if (_isAdmin)
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
+                                onPressed: () => _deletePayment(project, p),
+                              ),
+                          ],
+                        ),
+                      );
+                    }),
+                ],
+              ),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -958,66 +1061,57 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             onPressed: _showAddWindowDialog,
             child: const Icon(Icons.add),
           ),
-          body: Column(
-            children: [
-              _statusStrip(project),
+          backgroundColor: Brand.background,
+          body: CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(child: _statusStrip(project)),
               if (project.priceChangedAfterApproval)
-                Material(
-                  color: Colors.amber.shade100,
-                  child: ListTile(
-                    dense: true,
-                    leading: const Icon(Icons.warning_amber, color: Colors.orange),
-                    title: Text(
-                      'Onaydan sonra fiyat değişti: onaylanan ${formatMoney(project.approvedTotal ?? 0)}, güncel ${formatMoney(project.displaySaleTotal)}',
-                      style: const TextStyle(fontSize: 13),
+                SliverToBoxAdapter(
+                  child: Material(
+                    color: Colors.amber.shade100,
+                    child: ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.warning_amber, color: Colors.orange),
+                      title: Text(
+                        'Onaydan sonra fiyat değişti: onaylanan ${formatMoney(project.approvedTotal ?? 0)}, güncel ${formatMoney(project.displaySaleTotal)}',
+                        style: const TextStyle(fontSize: 13),
+                      ),
                     ),
                   ),
                 ),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(15),
-                color: Colors.blue.shade50,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("Açıklama: ${project.description}", style: TextStyle(color: Colors.grey[800])),
-                    if ((project.customerName ?? '').isNotEmpty)
-                      Text('Müşteri: ${project.customerName}', style: const TextStyle(fontSize: 13)),
-                    if (project.deliveryDate != null)
-                      Text('Teslim: ${formatDate(project.deliveryDate)}', style: const TextStyle(fontSize: 13)),
-                    const SizedBox(height: 5),
-                    Text(
-                      'Toplam (KDV hariç): ${formatMoney(project.displaySaleTotal)}',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green),
+              SliverToBoxAdapter(child: _projectSummary(project)),
+              SliverToBoxAdapter(child: _paymentsSection(project)),
+              if (project.windowUnits.isEmpty)
+                const SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(child: Text('Henüz pencere yok.')),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+                  sliver: SliverGrid(
+                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 260,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                      childAspectRatio: 0.72,
                     ),
-                  ],
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final unit = project.windowUnits[index];
+                        return InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: () => _openEditor(unit.id, unit.name),
+                          onLongPress: () => _showWindowActions(unit),
+                          onSecondaryTap: () => _showWindowActions(unit),
+                          child: DesignThumbnail.unit(unit, catalog: _catalog),
+                        );
+                      },
+                      childCount: project.windowUnits.length,
+                    ),
+                  ),
                 ),
-              ),
-              _paymentsSection(project),
-              Expanded(
-                child: project.windowUnits.isEmpty
-                    ? const Center(child: Text("Henüz pencere yok."))
-                    : GridView.builder(
-                        padding: const EdgeInsets.all(10),
-                        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 240,
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 10,
-                          childAspectRatio: 0.85,
-                        ),
-                        itemCount: project.windowUnits.length,
-                        itemBuilder: (context, index) {
-                          final unit = project.windowUnits[index];
-                          return InkWell(
-                            borderRadius: BorderRadius.circular(8),
-                            onTap: () => _openEditor(unit.id, unit.name),
-                            onLongPress: () => _showWindowActions(unit),
-                            onSecondaryTap: () => _showWindowActions(unit),
-                            child: DesignThumbnail.unit(unit, catalog: _catalog),
-                          );
-                        },
-                      ),
-              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 88)),
             ],
           ),
         );

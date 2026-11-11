@@ -6,6 +6,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:windoor_core/windoor_core.dart';
 
 import '../drawing/glass_look.dart';
+import '../theme/drawing_style.dart';
 
 class _Xform {
   final double ox, oy, k, designH, widgetH;
@@ -85,6 +86,32 @@ pw.Widget pdfWindowDrawing({
   final fs = math.max(6.0, fsMm * k);
 
   final labels = <pw.Widget>[];
+  final labelFs = (math.max(dimW, dimH) / 52 * k).clamp(5.0, 12.0);
+  for (final p in layout.prims) {
+    if (p is! TextPrim || p.text.isEmpty) continue;
+    final slide = p.text == 'Sabit' ||
+        p.text.toUpperCase().contains('SABİT') ||
+        p.text == 'HS';
+    if (!slide) continue;
+    final left = xf.x(p.at.x) - labelFs * 1.5;
+    final top = xf.topFromMm(p.at.y, textH: labelFs);
+    labels.add(pw.Positioned(
+      left: left,
+      top: top,
+      child: pw.SizedBox(
+        width: labelFs * 3,
+        child: pw.Text(
+          p.text,
+          textAlign: pw.TextAlign.center,
+          style: pw.TextStyle(
+            fontSize: labelFs,
+            fontWeight: p.text == 'Sabit' ? pw.FontWeight.bold : pw.FontWeight.normal,
+            color: _pdf(DrawingStyle.slideLabel),
+          ),
+        ),
+      ),
+    ));
+  }
   if (showDimensions) {
     labels.addAll(_dimLabels(
       xf,
@@ -166,7 +193,7 @@ List<pw.Widget> _dimLabels(
           child: pw.Text(
             label,
             textAlign: pw.TextAlign.center,
-            style: pw.TextStyle(fontSize: fontSize, color: PdfColors.grey800),
+            style: pw.TextStyle(fontSize: fontSize, color: _pdf(DrawingStyle.dim)),
           ),
         ),
       ));
@@ -191,7 +218,7 @@ List<pw.Widget> _dimLabels(
             child: pw.Text(
               label,
               textAlign: pw.TextAlign.center,
-              style: pw.TextStyle(fontSize: localFs, color: PdfColors.grey800),
+              style: pw.TextStyle(fontSize: localFs, color: _pdf(DrawingStyle.dim)),
             ),
           ),
         ),
@@ -228,9 +255,8 @@ void _paintGeometry(
   required double fsMm,
 }) {
   final hair = math.max(0.35, 0.7);
-  final fill = _pdf(color.fill);
-  final stroke = _pdf(color.stroke);
-  final hardware = _pdf(color.hardware);
+  final tones = DrawingStyle.bevelForProfile(color).map(_pdf).toList();
+  final contour = _pdf(DrawingStyle.contour);
 
   final prims = [...layout.prims]..sort((a, b) {
       final la = a.layer.index.compareTo(b.layer.index);
@@ -240,18 +266,31 @@ void _paintGeometry(
   for (final p in prims) {
     switch (p) {
       case ProfilePoly pp:
-        _profile(canvas, xf, pp, fill, stroke, hair);
+        _profile(canvas, xf, pp, tones, contour, hair);
       case BarRect b:
-        _bar(canvas, xf, b, fill, stroke, hair);
+        _bar(canvas, xf, b, tones, contour, hair);
       case GlassPrim g:
-        _glass(canvas, xf, g, lookOf, stroke, hair);
+        _glass(canvas, xf, g, lookOf, contour, hair);
       case PolylinePrim l:
         if (l.pts.isEmpty) continue;
-        if (l.layer == DrawLayer.screen) {
-          canvas.setStrokeColor(const PdfColor(0.5, 0.5, 0.5, 0.35));
+        final isScreen = l.layer == DrawLayer.screen;
+        final isSymbol = l.layer == DrawLayer.symbol;
+        final isShutterSlat = l.layer == DrawLayer.frame &&
+            l.pts.length == 2 &&
+            l.pts.first.y < 0 &&
+            (l.pts.first.y - l.pts.last.y).abs() < 0.01;
+        if (isScreen) {
+          final sg = DrawingStyle.screenGrid;
+          canvas.setStrokeColor(PdfColor(sg.r, sg.g, sg.b, 0.45));
           canvas.setLineWidth(0.6);
+        } else if (isShutterSlat) {
+          canvas.setStrokeColor(_pdf(DrawingStyle.shutterLine));
+          canvas.setLineWidth(1.2);
+        } else if (isSymbol) {
+          canvas.setStrokeColor(_pdf(DrawingStyle.amber));
+          canvas.setLineWidth(2.2);
         } else {
-          canvas.setStrokeColor(const PdfColor(0.125, 0.188, 0.227));
+          canvas.setStrokeColor(contour);
           canvas.setLineWidth(1.1);
         }
         canvas.setLineJoin(PdfLineJoin.round);
@@ -261,7 +300,7 @@ void _paintGeometry(
             final dx = b.x - a.x, dy = b.y - a.y;
             final len = math.sqrt(dx * dx + dy * dy);
             if (len <= 0) continue;
-            const dash = 12.0, gap = 7.0;
+            const dash = 9.0, gap = 6.0;
             var d = 0.0;
             while (d < len) {
               final n = math.min(d + dash, len);
@@ -279,11 +318,15 @@ void _paintGeometry(
           canvas.strokePath();
         }
       case HandlePrim h:
-        for (final box in [h.base, h.lever, if (h.lock != null) h.lock!]) {
-          canvas.setFillColor(hardware);
+        for (final (box, fill) in [
+          (h.base, _pdf(DrawingStyle.handleBase)),
+          (h.lever, _pdf(DrawingStyle.amber)),
+          if (h.lock != null) (h.lock!, _pdf(DrawingStyle.lockDot)),
+        ]) {
+          canvas.setFillColor(fill);
           canvas.drawRect(xf.x(box.l), xf.y(box.b), (box.r - box.l) * xf.k, (box.b - box.t) * xf.k);
           canvas.fillPath();
-          canvas.setStrokeColor(const PdfColor(0.227, 0.255, 0.275));
+          canvas.setStrokeColor(contour);
           canvas.setLineWidth(hair);
           canvas.drawRect(xf.x(box.l), xf.y(box.b), (box.r - box.l) * xf.k, (box.b - box.t) * xf.k);
           canvas.strokePath();
@@ -298,10 +341,7 @@ void _paintGeometry(
   }
 }
 
-const _sashShade = {ProfileSide.top: 0.0, ProfileSide.left: .04, ProfileSide.right: .10, ProfileSide.bottom: .15};
-const _beadShade = {ProfileSide.top: .16, ProfileSide.left: .10, ProfileSide.right: .03, ProfileSide.bottom: 0.0};
-
-void _profile(PdfGraphics c, _Xform xf, ProfilePoly p, PdfColor fill, PdfColor stroke, double hair) {
+void _profile(PdfGraphics c, _Xform xf, ProfilePoly p, List<PdfColor> tones, PdfColor stroke, double hair) {
   void path() {
     c.moveTo(xf.x(p.pts.first.x), xf.y(p.pts.first.y));
     for (final q in p.pts.skip(1)) {
@@ -310,44 +350,50 @@ void _profile(PdfGraphics c, _Xform xf, ProfilePoly p, PdfColor fill, PdfColor s
     c.closePath();
   }
 
+  final i = switch (p.side) {
+    ProfileSide.top => 0,
+    ProfileSide.right => 1,
+    ProfileSide.bottom => 2,
+    ProfileSide.left => 3,
+  };
+  var fill = tones[i];
+  if (p.layer == DrawLayer.bead) fill = _mixBlack(fill, 0.10);
+
   path();
   c.setFillColor(fill);
   c.fillPath();
 
-  final shade = (p.layer == DrawLayer.bead ? _beadShade : _sashShade)[p.side] ?? 0;
-  if (shade > 0) {
-    path();
-    c.setFillColor(_mixBlack(fill, shade));
-    c.fillPath();
-  }
-
   path();
   c.setStrokeColor(stroke);
-  c.setLineWidth(hair);
-  c.setLineJoin(PdfLineJoin.round);
+  c.setLineWidth(1.2 * hair);
+  c.setLineJoin(PdfLineJoin.miter);
   c.strokePath();
 }
 
-void _bar(PdfGraphics c, _Xform xf, BarRect b, PdfColor fill, PdfColor stroke, double hair) {
+bool _isShutterBox(BarRect b) => b.metallic && b.box.t < 0 && b.box.b <= 0.5;
+bool _isShutterRail(BarRect b) => b.metallic && b.box.t < 0 && b.box.b > 0.5;
+
+void _bar(PdfGraphics c, _Xform xf, BarRect b, List<PdfColor> tones, PdfColor stroke, double hair) {
   final l = xf.x(b.box.l), bottom = xf.y(b.box.b);
   final w = (b.box.r - b.box.l) * xf.k, h = (b.box.b - b.box.t) * xf.k;
-  c.setFillColor(b.metallic ? const PdfColor(0.55, 0.58, 0.62) : fill);
+  final fill = _isShutterBox(b)
+      ? _pdf(DrawingStyle.shutterBox)
+      : _isShutterRail(b)
+          ? _pdf(DrawingStyle.shutterRail)
+          : b.metallic
+              ? _pdf(DrawingStyle.threshold)
+              : (b.layer == DrawLayer.mullion || b.layer == DrawLayer.adapter || b.layer == DrawLayer.coupling)
+                  ? tones[0]
+                  : (b.layer == DrawLayer.bead && b.box.h < 25)
+                      ? _pdf(DrawingStyle.sill)
+                      : (b.layer == DrawLayer.frame && b.box.h < 30 && b.box.w > b.box.h * 3)
+                          ? _pdf(DrawingStyle.sill)
+                          : tones[0];
+  c.setFillColor(fill);
   c.drawRect(l, bottom, w, h);
   c.fillPath();
-  if (!b.metallic && b.dir != null) {
-    final v = b.dir == SplitDir.v;
-    if (v) {
-      c.setFillColor(_mixBlack(fill, .08));
-      c.drawRect(l + w * .62, bottom, w * .38, h);
-      c.fillPath();
-    } else {
-      c.setFillColor(_mixBlack(fill, .08));
-      c.drawRect(l, bottom, w, h * .38);
-      c.fillPath();
-    }
-  }
   c.setStrokeColor(stroke);
-  c.setLineWidth(hair);
+  c.setLineWidth(1.2 * hair);
   c.drawRect(l, bottom, w, h);
   c.strokePath();
 }
@@ -375,7 +421,7 @@ void _glass(
   final l = xf.x(box.l), bottom = xf.y(box.b);
   final w = wMm * xf.k, h = hMm * xf.k;
   final look = g.fill == FillType.panel ? GlassLook.panelLook : lookOf(g.glassCode);
-  final mid = _pdf(look.gradient[look.gradient.length ~/ 2]);
+  final glassStroke = _pdf(DrawingStyle.glassStroke);
   final clip = g.clip;
 
   void fillShape() {
@@ -389,11 +435,11 @@ void _glass(
   }
 
   if (look.panel) {
-    c.setFillColor(_pdf(look.gradient.first));
+    c.setFillColor(_pdf(DrawingStyle.panelFill));
     fillShape();
-    c.setStrokeColor(const PdfColor(0.604, 0.639, 0.663));
+    c.setStrokeColor(_pdf(DrawingStyle.panelLine));
     c.setLineWidth(hair);
-    for (var yMm = box.t + 60; yMm < box.b; yMm += 60) {
+    for (var yMm = box.t + 22; yMm < box.b; yMm += 22) {
       final yy = xf.y(yMm);
       c.moveTo(l, yy);
       c.lineTo(l + w, yy);
@@ -411,10 +457,10 @@ void _glass(
   }
 
   if (look.frosted) {
-    c.setFillColor(_mixWhite(mid, 0.55));
+    c.setFillColor(_mixWhite(_pdf(DrawingStyle.glassFlatPdf), 0.55));
     fillShape();
   } else {
-    c.setFillColor(mid);
+    c.setFillColor(_pdf(DrawingStyle.glassFlatPdf));
     fillShape();
   }
 
@@ -426,7 +472,7 @@ void _glass(
   }
   c.clipPath();
 
-  if (look.reflection > 0 && !look.frosted) {
+  if (!look.frosted) {
     final kBand = math.min(hMm * .55, wMm * .9) * xf.k;
     void band(double a, double t, double opacity) {
       c.setGraphicState(PdfGraphicState(opacity: opacity));
@@ -442,12 +488,12 @@ void _glass(
       c.setGraphicState(const PdfGraphicState(opacity: 1));
     }
 
-    band(.08, .16, 0.35);
-    band(.30, .05, 0.28);
+    band(.08, .16, 0.30);
+    band(.30, .05, 0.22);
   }
 
   if (look.patterned) {
-    c.setStrokeColor(_mixWhite(mid, 0.7));
+    c.setStrokeColor(_mixWhite(_pdf(DrawingStyle.glassFlatPdf), 0.7));
     c.setLineWidth(0.8);
     const step = 36.0;
     for (var d = -hMm; d < wMm; d += step) {
@@ -476,10 +522,15 @@ void _glass(
 
   c.restoreContext();
 
-  c.setStrokeColor(const PdfColor(0.373, 0.541, 0.651));
+  c.setStrokeColor(glassStroke);
   c.setLineWidth(0.7);
-  c.drawRect(l, bottom, w, h);
-  c.strokePath();
+  if (clip != null && clip.length >= 3) {
+    _polyPath(c, xf, clip);
+    c.strokePath();
+  } else {
+    c.drawRect(l, bottom, w, h);
+    c.strokePath();
+  }
 }
 
 void _dimLines(
@@ -495,7 +546,7 @@ void _dimLines(
   List<FrameBox> frames = const [],
 }) {
   void chain(List<double> v, bool horiz, double off) {
-    c.setStrokeColor(PdfColors.grey800);
+    c.setStrokeColor(_pdf(DrawingStyle.dim));
     c.setLineWidth(0.6);
     final t = fsMm * .35;
     if (horiz) {
@@ -512,15 +563,9 @@ void _dimLines(
         c.moveTo(xf.x(x), xf.y(off - t * 2));
         c.lineTo(xf.x(x), xf.y(off + t * 2));
         c.strokePath();
-        c.moveTo(xf.x(x - t), xf.y(off + t));
-        c.lineTo(xf.x(x + t), xf.y(off - t));
-        c.strokePath();
       } else {
         c.moveTo(xf.x(off - t * 2), xf.y(x));
         c.lineTo(xf.x(off + t * 2), xf.y(x));
-        c.strokePath();
-        c.moveTo(xf.x(off - t), xf.y(x + t));
-        c.lineTo(xf.x(off + t), xf.y(x - t));
         c.strokePath();
       }
     }

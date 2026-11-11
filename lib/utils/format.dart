@@ -148,6 +148,19 @@ String formatDate(DateTime? d) {
   return '$dd.$mm.${d.year}';
 }
 
+/// Çevrimdışı şerit: "14:32" / "dün 18:05" / "henüz indirilmedi".
+String formatLastUpdateShort(DateTime? t, {DateTime? now}) {
+  if (t == null) return 'henüz indirilmedi';
+  final n = now ?? DateTime.now();
+  final hh = t.hour.toString().padLeft(2, '0');
+  final mi = t.minute.toString().padLeft(2, '0');
+  final today = DateTime(n.year, n.month, n.day);
+  final day = DateTime(t.year, t.month, t.day);
+  if (day == today) return '$hh:$mi';
+  if (day == today.subtract(const Duration(days: 1))) return 'dün $hh:$mi';
+  return '${formatDate(t)} $hh:$mi';
+}
+
 /// dd.MM.yyyy HH:mm
 String formatDateTime(DateTime? d) {
   if (d == null) return '—';

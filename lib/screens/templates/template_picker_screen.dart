@@ -44,9 +44,9 @@ class _TemplatePickerScreenState extends State<TemplatePickerScreen> with Single
   late final DesignApi _designApi = widget.designApi ?? DesignApi();
   late final TemplateApi _templateApi = widget.templateApi ?? TemplateApi();
   late final TabController _tabs = TabController(
-    length: 4,
+    length: 6,
     vsync: this,
-    initialIndex: widget.initialTabIndex.clamp(0, 3),
+    initialIndex: widget.initialTabIndex.clamp(0, 5),
   );
 
   CatalogSnapshot? _catalog;
@@ -68,7 +68,7 @@ class _TemplatePickerScreenState extends State<TemplatePickerScreen> with Single
   }
 
   void _onTab() {
-    if (!_tabs.indexIsChanging && _tabs.index == 3) _ensureCompanyLoaded();
+    if (!_tabs.indexIsChanging && _tabs.index == 5) _ensureCompanyLoaded();
   }
 
   @override
@@ -397,7 +397,9 @@ class _TemplatePickerScreenState extends State<TemplatePickerScreen> with Single
           tabs: const [
             Tab(text: 'Pencere'),
             Tab(text: 'Kapı'),
+            Tab(text: 'Birleşik'),
             Tab(text: 'Sürme'),
+            Tab(text: 'Şekilli'),
             Tab(text: 'Firmamın şablonları'),
           ],
         ),
@@ -409,7 +411,9 @@ class _TemplatePickerScreenState extends State<TemplatePickerScreen> with Single
             children: [
               _builtInGrid('WINDOW'),
               _builtInGrid('DOOR'),
+              _builtInGrid('COUPLE'),
               _builtInGrid('SLIDING'),
+              _builtInGrid('SHAPED'),
               _companyTab(),
             ],
           ),

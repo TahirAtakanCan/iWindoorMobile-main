@@ -32,6 +32,8 @@ class ConnectivityState extends ChangeNotifier with WidgetsBindingObserver {
     _timer ??= Timer.periodic(const Duration(seconds: 15), (_) {
       if (isOffline) probe();
     });
+    // İlk damga: çevrimdışı şeritte "henüz indirilmedi" yerine gerçek saat.
+    unawaited(probe());
   }
 
   void detachLifecycle() {

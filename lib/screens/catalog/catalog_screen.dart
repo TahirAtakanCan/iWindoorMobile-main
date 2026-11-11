@@ -422,28 +422,34 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
           ),
         );
       }
-      return ListView.separated(
-        padding: const EdgeInsets.all(12),
-        itemCount: items.length + 1,
-        separatorBuilder: (_, __) => const SizedBox(height: 6),
-        itemBuilder: (_, i) {
-          if (i == 0) return _seriesSection();
-          final p = items[i - 1];
-          return Opacity(
-            opacity: p.isActive ? 1 : .55,
-            child: Card(
-              child: ListTile(
-                title: Text(p.name),
-                subtitle: Text('${p.code} · ${p.type}'
-                    '${p.barLengthMm != null ? ' · boy ${p.barLengthMm} mm' : ''}'
-                    '${p.isDefault ? ' · varsayılan' : ''}'
-                    '${p.isActive ? '' : ' · pasif'}'),
-                trailing: Text(_tl(p.pricePerMeter), style: const TextStyle(fontWeight: FontWeight.w600)),
-                onTap: _isAdmin ? () => _editProfile(p) : null,
-              ),
+      return CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(child: _seriesSection()),
+          SliverPadding(
+            padding: const EdgeInsets.all(12),
+            sliver: SliverList.separated(
+              itemCount: items.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 6),
+              itemBuilder: (_, i) {
+                final p = items[i];
+                return Opacity(
+                  opacity: p.isActive ? 1 : .55,
+                  child: Card(
+                    child: ListTile(
+                      title: Text(p.name),
+                      subtitle: Text('${p.code} · ${p.type}'
+                          '${p.barLengthMm != null ? ' · boy ${p.barLengthMm} mm' : ''}'
+                          '${p.isDefault ? ' · varsayılan' : ''}'
+                          '${p.isActive ? '' : ' · pasif'}'),
+                      trailing: Text(_tl(p.pricePerMeter), style: const TextStyle(fontWeight: FontWeight.w600)),
+                      onTap: _isAdmin ? () => _editProfile(p) : null,
+                    ),
+                  ),
+                );
+              },
             ),
-          );
-        },
+          ),
+        ],
       );
     });
   }
@@ -558,28 +564,35 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
           ),
         );
       }
-      return ListView.separated(
-        padding: const EdgeInsets.all(12),
-        itemCount: items.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 6),
-        itemBuilder: (_, i) {
-          final g = items[i];
-          return Opacity(
-            opacity: g.isActive ? 1 : .55,
-            child: Card(
-              child: ListTile(
-                leading: GlassLook.forStyle(g.visualStyle).swatch(),
-                title: Text(g.name),
-                subtitle: Text('${g.code}'
-                    '${g.thicknessMm != null ? ' · ${g.thicknessMm} mm' : ''}'
-                    ' · ${GlassLook.styles[g.visualStyle] ?? g.visualStyle}'
-                    '${g.isActive ? '' : ' · pasif'}'),
-                trailing: Text('${_tl(g.pricePerSquareMeter)}/m²'),
-                onTap: _isAdmin ? () => _editGlass(g) : null,
-              ),
+      return CustomScrollView(
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.all(12),
+            sliver: SliverList.separated(
+              itemCount: items.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 6),
+              itemBuilder: (_, i) {
+                final g = items[i];
+                return Opacity(
+                  opacity: g.isActive ? 1 : .55,
+                  child: Card(
+                    child: ListTile(
+                      leading: GlassLook.forStyle(g.visualStyle).swatch(),
+                      title: Text(g.name),
+                      subtitle: Text('${g.code}'
+                          '${g.thicknessMm != null ? ' · ${g.thicknessMm} mm' : ''}'
+                          ' · ${GlassLook.styles[g.visualStyle] ?? g.visualStyle}'
+                          '${g.isActive ? '' : ' · pasif'}'),
+                      trailing: Text('${_tl(g.pricePerSquareMeter)}/m²'),
+                      onTap: _isAdmin ? () => _editGlass(g) : null,
+                    ),
+                  ),
+                );
+              },
             ),
-          );
-        },
+          ),
+          if (_isAdmin) const SliverToBoxAdapter(child: SizedBox(height: 88)),
+        ],
       );
     });
   }
@@ -740,24 +753,31 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
           ),
         );
       }
-      return ListView.separated(
-        padding: const EdgeInsets.all(12),
-        itemCount: items.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 6),
-        itemBuilder: (_, i) {
-          final a = items[i];
-          return Opacity(
-            opacity: a.isActive ? 1 : .55,
-            child: Card(
-              child: ListTile(
-                title: Text(a.name),
-                subtitle: Text('${a.code} · ${accessoryUnitTr(a.unit)}${a.isActive ? '' : ' · pasif'}'),
-                trailing: Text(_tl(a.price)),
-                onTap: _isAdmin ? () => _editAccessory(a) : null,
-              ),
+      return CustomScrollView(
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.all(12),
+            sliver: SliverList.separated(
+              itemCount: items.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 6),
+              itemBuilder: (_, i) {
+                final a = items[i];
+                return Opacity(
+                  opacity: a.isActive ? 1 : .55,
+                  child: Card(
+                    child: ListTile(
+                      title: Text(a.name),
+                      subtitle: Text('${a.code} · ${accessoryUnitTr(a.unit)}${a.isActive ? '' : ' · pasif'}'),
+                      trailing: Text(_tl(a.price)),
+                      onTap: _isAdmin ? () => _editAccessory(a) : null,
+                    ),
+                  ),
+                );
+              },
             ),
-          );
-        },
+          ),
+          if (_isAdmin) const SliverToBoxAdapter(child: SizedBox(height: 88)),
+        ],
       );
     });
   }
@@ -879,57 +899,58 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
   Widget _hardwareTab() {
     const kinds = ['TURN', 'TILT', 'TILT_TURN', 'SLIDE'];
     final theme = Theme.of(context);
-    return ListView(
-      padding: const EdgeInsets.all(12),
-      children: [
-        for (final kind in kinds) ...[
-          Padding(
-            padding: const EdgeInsets.only(top: 8, bottom: 6),
-            child: Text(hardwareKindTr(kind), style: theme.textTheme.titleMedium),
+    final sections = <Widget>[];
+    for (final kind in kinds) {
+      sections.add(Padding(
+        padding: const EdgeInsets.only(top: 8, bottom: 6),
+        child: Text(hardwareKindTr(kind), style: theme.textTheme.titleMedium),
+      ));
+      final ofKind = _rules.where((r) => r.kind == kind).toList();
+      if (ofKind.isEmpty) {
+        sections.add(Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text('Kural yok.', style: theme.textTheme.bodySmall),
+        ));
+        continue;
+      }
+      final seriesIds = <int?>{null, ...ofKind.map((r) => r.seriesId)};
+      final ordered = seriesIds.toList()
+        ..sort((a, b) {
+          if (a == null && b == null) return 0;
+          if (a == null) return -1;
+          if (b == null) return 1;
+          return _seriesName(a).compareTo(_seriesName(b));
+        });
+      for (final sid in ordered) {
+        final rows = ofKind.where((r) => r.seriesId == sid).toList();
+        if (rows.isEmpty) continue;
+        sections.add(Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 2, left: 4),
+          child: Text(_seriesName(sid), style: theme.textTheme.titleSmall),
+        ));
+        if (sid != null) {
+          sections.add(Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 6),
+            child: Text(
+              'Bu seride yalnızca aşağıdaki kurallar geçerli',
+              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ));
+        }
+        for (final r in rows) {
+          sections.add(_ruleTile(r));
+        }
+      }
+    }
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.all(12),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate(sections),
           ),
-          ...() {
-            final ofKind = _rules.where((r) => r.kind == kind).toList();
-            if (ofKind.isEmpty) {
-              return [
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text('Kural yok.', style: theme.textTheme.bodySmall),
-                ),
-              ];
-            }
-            final seriesIds = <int?>{null, ...ofKind.map((r) => r.seriesId)};
-            // null (tüm seriler) önce, sonra ada göre
-            final ordered = seriesIds.toList()
-              ..sort((a, b) {
-                if (a == null && b == null) return 0;
-                if (a == null) return -1;
-                if (b == null) return 1;
-                return _seriesName(a).compareTo(_seriesName(b));
-              });
-            final widgets = <Widget>[];
-            for (final sid in ordered) {
-              final rows = ofKind.where((r) => r.seriesId == sid).toList();
-              if (rows.isEmpty) continue;
-              widgets.add(Padding(
-                padding: const EdgeInsets.only(top: 4, bottom: 2, left: 4),
-                child: Text(_seriesName(sid), style: theme.textTheme.titleSmall),
-              ));
-              if (sid != null) {
-                widgets.add(Padding(
-                  padding: const EdgeInsets.only(left: 4, bottom: 6),
-                  child: Text(
-                    'Bu seride yalnızca aşağıdaki kurallar geçerli',
-                    style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                  ),
-                ));
-              }
-              for (final r in rows) {
-                widgets.add(_ruleTile(r));
-              }
-            }
-            return widgets;
-          }(),
-        ],
+        ),
+        if (_isAdmin) const SliverToBoxAdapter(child: SizedBox(height: 88)),
       ],
     );
   }
@@ -1109,29 +1130,36 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
     if (colors.isEmpty) {
       return const Center(child: Text('Renk yok.'));
     }
-    return ListView.separated(
-      padding: const EdgeInsets.all(12),
-      itemCount: colors.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (_, i) {
-        final col = colors[i];
-        return Card(
-          child: ListTile(
-            leading: Row(mainAxisSize: MainAxisSize.min, children: [
-              Container(width: 28, height: 28, decoration: BoxDecoration(color: _hexColor(col.hexOutside), border: Border.all())),
-              const SizedBox(width: 4),
-              Container(width: 28, height: 28, decoration: BoxDecoration(color: _hexColor(col.hexInside), border: Border.all())),
-            ]),
-            title: Text(col.name, overflow: TextOverflow.ellipsis),
-            subtitle: Text('${col.code} · %${col.surchargePct.toStringAsFixed(col.surchargePct == col.surchargePct.roundToDouble() ? 0 : 1)}'
-                '${col.isActive ? '' : ' · Pasif'}'),
-            trailing: _isAdmin
-                ? IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => _editColor(col))
-                : null,
-            onTap: _isAdmin ? () => _editColor(col) : null,
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.all(12),
+          sliver: SliverList.separated(
+            itemCount: colors.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (_, i) {
+              final col = colors[i];
+              return Card(
+                child: ListTile(
+                  leading: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Container(width: 28, height: 28, decoration: BoxDecoration(color: _hexColor(col.hexOutside), border: Border.all())),
+                    const SizedBox(width: 4),
+                    Container(width: 28, height: 28, decoration: BoxDecoration(color: _hexColor(col.hexInside), border: Border.all())),
+                  ]),
+                  title: Text(col.name, overflow: TextOverflow.ellipsis),
+                  subtitle: Text('${col.code} · %${col.surchargePct.toStringAsFixed(col.surchargePct == col.surchargePct.roundToDouble() ? 0 : 1)}'
+                      '${col.isActive ? '' : ' · Pasif'}'),
+                  trailing: _isAdmin
+                      ? IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => _editColor(col))
+                      : null,
+                  onTap: _isAdmin ? () => _editColor(col) : null,
+                ),
+              );
+            },
           ),
-        );
-      },
+        ),
+        if (_isAdmin) const SliverToBoxAdapter(child: SizedBox(height: 88)),
+      ],
     );
   }
 

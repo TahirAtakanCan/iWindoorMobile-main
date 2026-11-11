@@ -45,7 +45,7 @@ String surveyProductTr(SurveyProductType t) => switch (t) {
 String defaultTemplateNameFor(SurveyProductType type, double suggestedWidthMm) {
   switch (type) {
     case SurveyProductType.window:
-      return suggestedWidthMm > 1000 ? 'Çift kanat (orta kayıtsız)' : 'Tek kanat çift açılım';
+      return suggestedWidthMm > 1000 ? 'Çift kanat (orta kayıtsız)' : 'Tek kanat açılır-vasistas';
     case SurveyProductType.door:
       return 'Servis kapısı';
     case SurveyProductType.balcony:
@@ -57,9 +57,9 @@ String defaultTemplateNameFor(SurveyProductType type, double suggestedWidthMm) {
   }
 }
 
-/// Şablon seçici sekme indeksi: 0 pencere, 1 kapı, 2 sürme, 3 firma.
+/// Şablon seçici sekme indeksi: 0 pencere, 1 kapı, 2 birleşik, 3 sürme, 4 şekilli, 5 firma.
 int templateTabForProduct(SurveyProductType t) => switch (t) {
       SurveyProductType.window || SurveyProductType.other => 0,
       SurveyProductType.door || SurveyProductType.balcony => 1,
-      SurveyProductType.sliding => 2,
+      SurveyProductType.sliding => 3,
     };

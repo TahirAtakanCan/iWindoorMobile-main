@@ -351,72 +351,86 @@ class _ProductionScreenState extends State<ProductionScreen> with SingleTickerPr
     }
     selected ??= plan.groups.isEmpty ? null : plan.groups.first;
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-          child: _settingsRow(),
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+            child: _settingsRow(),
+          ),
         ),
         if (plan.allUncuttable.isNotEmpty)
-          Material(
-            color: Colors.red.shade50,
-            child: ListTile(
-              dense: true,
-              leading: const Icon(Icons.warning_amber, color: Colors.red),
-              title: Text('${plan.allUncuttable.length} parça boydan uzun — kesilemez.'),
+          SliverToBoxAdapter(
+            child: Material(
+              color: Colors.red.shade50,
+              child: ListTile(
+                dense: true,
+                leading: const Icon(Icons.warning_amber, color: Colors.red),
+                title: Text('${plan.allUncuttable.length} parça boydan uzun — kesilemez.'),
+              ),
             ),
           ),
-        SizedBox(
-          height: 92,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            children: [
-              for (final g in plan.groups)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    label: Text(
-                      '${g.code}\n${g.plan.totalBars} boy · ${g.totalMeters.toStringAsFixed(1)} m · %${g.wastePct.toStringAsFixed(0)}',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 11, height: 1.2),
+        SliverToBoxAdapter(
+          child: SizedBox(
+            height: 92,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              children: [
+                for (final g in plan.groups)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(
+                        '${g.code}\n${g.plan.totalBars} boy · ${g.totalMeters.toStringAsFixed(1)} m · %${g.wastePct.toStringAsFixed(0)}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 11, height: 1.2),
+                      ),
+                      selected: _selectedCode == g.code,
+                      onSelected: (_) => setState(() => _selectedCode = g.code),
                     ),
-                    selected: _selectedCode == g.code,
-                    onSelected: (_) => setState(() => _selectedCode = g.code),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
-        const Divider(height: 1),
-        Expanded(
-          child: selected == null
-              ? const Center(child: Text('Profil seçin.'))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: selected.plan.bars.length + (selected.plan.uncuttable.isEmpty ? 0 : 1),
-                  itemBuilder: (_, i) {
-                    if (i >= selected!.plan.bars.length) {
-                      return Card(
-                        color: Colors.red.shade50,
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Kesilemez', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
-                              for (final u in selected.plan.uncuttable)
-                                Text('${u.label} — ${u.length.round()} mm'),
-                            ],
-                          ),
+        const SliverToBoxAdapter(child: Divider(height: 1)),
+        if (selected == null)
+          const SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(child: Text('Profil seçin.')),
+          )
+        else ...[
+          SliverPadding(
+            padding: const EdgeInsets.all(12),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, i) {
+                  if (i >= selected!.plan.bars.length) {
+                    return Card(
+                      color: Colors.red.shade50,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Kesilemez', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+                            for (final u in selected.plan.uncuttable)
+                              Text('${u.label} — ${u.length.round()} mm'),
+                          ],
                         ),
-                      );
-                    }
-                    final bar = selected.plan.bars[i];
-                    return _BarCard(index: i + 1, bar: bar, barLength: selected.barLengthMm, minOffcut: _minOffcut);
-                  },
-                ),
-        ),
+                      ),
+                    );
+                  }
+                  final bar = selected.plan.bars[i];
+                  return _BarCard(index: i + 1, bar: bar, barLength: selected.barLengthMm, minOffcut: _minOffcut);
+                },
+                childCount: selected.plan.bars.length + (selected.plan.uncuttable.isEmpty ? 0 : 1),
+              ),
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+        ],
       ],
     );
   }
@@ -491,75 +505,80 @@ class _ProductionScreenState extends State<ProductionScreen> with SingleTickerPr
     final glass = _glassOrder;
     final company = _company;
     if (glass == null) return const Center(child: Text('Cam listesi yok.'));
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(children: [
-            Expanded(
-              child: Text(
-                'Toplam ${glass.totalQty} adet · ${formatQty(glass.totalAreaM2, 'm2')}'
-                '${(company?.glassSupplierName ?? '').isNotEmpty ? '\n${company!.glassSupplierName}' : ''}',
-                style: Theme.of(context).textTheme.titleSmall,
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(children: [
+              Expanded(
+                child: Text(
+                  'Toplam ${glass.totalQty} adet · ${formatQty(glass.totalAreaM2, 'm2')}'
+                  '${(company?.glassSupplierName ?? '').isNotEmpty ? '\n${company!.glassSupplierName}' : ''}',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
               ),
-            ),
-            OutlinedButton.icon(
-              onPressed: _busy ? null : _shareGlassCsv,
-              icon: const Icon(Icons.table_view),
-              label: const Text('CSV'),
-            ),
-            const SizedBox(width: 8),
-            FilledButton.icon(
-              onPressed: _busy ? null : _shareGlassPdf,
-              icon: const Icon(Icons.picture_as_pdf),
-              label: const Text('PDF'),
-            ),
-          ]),
-        ),
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
-            children: [
-              for (final g in glass.groups) ...[
-                Text(
-                  g.isPanel ? 'Paneller' : '${g.code} · ${g.name}',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                ),
-                const SizedBox(height: 6),
-                Card(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      columnSpacing: 16,
-                      columns: const [
-                        DataColumn(label: Text('Poz')),
-                        DataColumn(label: Text('Ölçü')),
-                        DataColumn(label: Text('Adet'), numeric: true),
-                        DataColumn(label: Text('m²'), numeric: true),
-                      ],
-                      rows: [
-                        for (final l in g.lines)
-                          DataRow(cells: [
-                            DataCell(Text(l.posLabel)),
-                            DataCell(Text('${l.width.round()}×${l.height.round()}')),
-                            DataCell(Text('${l.qty}')),
-                            DataCell(Text(l.areaM2.toStringAsFixed(3))),
-                          ]),
-                        DataRow(cells: [
-                          const DataCell(Text('Toplam', style: TextStyle(fontWeight: FontWeight.bold))),
-                          const DataCell(Text('')),
-                          DataCell(Text('${g.totalQty}', style: const TextStyle(fontWeight: FontWeight.bold))),
-                          DataCell(Text(g.totalAreaM2.toStringAsFixed(3), style: const TextStyle(fontWeight: FontWeight.bold))),
-                        ]),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-            ],
+              OutlinedButton.icon(
+                onPressed: _busy ? null : _shareGlassCsv,
+                icon: const Icon(Icons.table_view),
+                label: const Text('CSV'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: _busy ? null : _shareGlassPdf,
+                icon: const Icon(Icons.picture_as_pdf),
+                label: const Text('PDF'),
+              ),
+            ]),
           ),
         ),
+        for (final g in glass.groups) ...[
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+              child: Text(
+                g.isPanel ? 'Paneller' : '${g.code} · ${g.name}',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Card(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    columnSpacing: 16,
+                    columns: const [
+                      DataColumn(label: Text('Poz')),
+                      DataColumn(label: Text('Ölçü')),
+                      DataColumn(label: Text('Adet'), numeric: true),
+                      DataColumn(label: Text('m²'), numeric: true),
+                    ],
+                    rows: [
+                      for (final l in g.lines)
+                        DataRow(cells: [
+                          DataCell(Text(l.posLabel)),
+                          DataCell(Text('${l.width.round()}×${l.height.round()}')),
+                          DataCell(Text('${l.qty}')),
+                          DataCell(Text(l.areaM2.toStringAsFixed(3))),
+                        ]),
+                      DataRow(cells: [
+                        const DataCell(Text('Toplam', style: TextStyle(fontWeight: FontWeight.bold))),
+                        const DataCell(Text('')),
+                        DataCell(Text('${g.totalQty}', style: const TextStyle(fontWeight: FontWeight.bold))),
+                        DataCell(Text(g.totalAreaM2.toStringAsFixed(3), style: const TextStyle(fontWeight: FontWeight.bold))),
+                      ]),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 16)),
+        ],
+        const SliverToBoxAdapter(child: SizedBox(height: 24)),
       ],
     );
   }
@@ -568,39 +587,44 @@ class _ProductionScreenState extends State<ProductionScreen> with SingleTickerPr
     final project = _project;
     if (project == null) return const SizedBox.shrink();
     final positions = _catalog == null ? <WorkshopPos>[] : ProductionPlanner.positions(project, _catalog!);
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('${project.name} · ${positions.length} poz', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          const Text('Atölye föyü fiyat içermez. Kapak, her poz için çizim/kesim/cam/donanım ve kesim planı üretir.'),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: _busy ? null : _shareWorkshopPdf,
-            icon: _busy
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.picture_as_pdf),
-            label: const Text('PDF üret / paylaş'),
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: ListView.separated(
-              itemCount: positions.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (_, i) {
-                final p = positions[i];
-                return ListTile(
-                  leading: CircleAvatar(child: Text(p.pos, style: const TextStyle(fontSize: 12))),
-                  title: Text(p.unit.name),
-                  subtitle: Text('${p.unit.width.round()}×${p.unit.height.round()} · ${p.unit.quantity} adet · ${p.series.name}'),
-                );
-              },
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          sliver: SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('${project.name} · ${positions.length} poz', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 8),
+                const Text('Atölye föyü fiyat içermez. Kapak, her poz için çizim/kesim/cam/donanım ve kesim planı üretir.'),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: _busy ? null : _shareWorkshopPdf,
+                  icon: _busy
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.picture_as_pdf),
+                  label: const Text('PDF üret / paylaş'),
+                ),
+                const SizedBox(height: 16),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+        SliverList.separated(
+          itemCount: positions.length,
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemBuilder: (_, i) {
+            final p = positions[i];
+            return ListTile(
+              leading: CircleAvatar(child: Text(p.pos, style: const TextStyle(fontSize: 12))),
+              title: Text(p.unit.name),
+              subtitle: Text('${p.unit.width.round()}×${p.unit.height.round()} · ${p.unit.quantity} adet · ${p.series.name}'),
+            );
+          },
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 24)),
+      ],
     );
   }
 }

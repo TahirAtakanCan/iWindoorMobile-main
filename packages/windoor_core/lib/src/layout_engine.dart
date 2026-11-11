@@ -982,7 +982,7 @@ class LayoutEngine {
             out.prims.add(TextPrim(DrawLayer.label, Pt(si.cx, si.cy), 'Sabit'));
           } else {
             final dir = panel.move == SlideMove.right ? 1.0 : -1.0;
-            _arrow(out, si, dir);
+            _arrow(out, si, dir, lift: n.system == SlideSystem.liftSlide);
           }
           if (n.system == SlideSystem.liftSlide) {
             out.prims.add(TextPrim(DrawLayer.label, Pt(so.cx, so.b - 18), 'HS'));
@@ -1205,13 +1205,22 @@ class LayoutEngine {
     }
   }
 
-  void _arrow(LayoutResult out, Box r, double dir) {
+  void _arrow(LayoutResult out, Box r, double dir, {bool lift = false}) {
     final len = math.min(r.w * .5, 360.0), hd = 40.0;
     final x0 = r.cx - dir * len / 2, x1 = r.cx + dir * len / 2;
     out.prims
       ..add(PolylinePrim(DrawLayer.symbol, [Pt(x0, r.cy), Pt(x1, r.cy)]))
       ..add(PolylinePrim(
           DrawLayer.symbol, [Pt(x1 - dir * hd, r.cy - hd * .6), Pt(x1, r.cy), Pt(x1 - dir * hd, r.cy + hd * .6)]));
+    if (lift) {
+      const up = 48.0, hdUp = 18.0;
+      final y0 = r.cy + up * 0.55;
+      final y1 = y0 - up;
+      out.prims
+        ..add(PolylinePrim(DrawLayer.symbol, [Pt(r.cx, y0), Pt(r.cx, y1)]))
+        ..add(PolylinePrim(
+            DrawLayer.symbol, [Pt(r.cx - hdUp, y1 + hdUp * .75), Pt(r.cx, y1), Pt(r.cx + hdUp, y1 + hdUp * .75)]));
+    }
   }
 }
 

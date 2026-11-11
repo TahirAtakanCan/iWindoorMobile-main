@@ -15,7 +15,9 @@ void main() {
 
   test('varsayılan şablon eşlemesi', () {
     expect(defaultTemplateNameFor(SurveyProductType.window, 1400), 'Çift kanat (orta kayıtsız)');
-    expect(defaultTemplateNameFor(SurveyProductType.window, 700), 'Tek kanat çift açılım');
+    expect(defaultTemplateNameFor(SurveyProductType.window, 700), 'Tek kanat açılır-vasistas');
+    expect(templateTabForProduct(SurveyProductType.sliding), 3);
+    expect(templateTabForProduct(SurveyProductType.door), 1);
     expect(defaultTemplateNameFor(SurveyProductType.door, 900), 'Servis kapısı');
     expect(defaultTemplateNameFor(SurveyProductType.balcony, 900), 'Balkon kapısı (eşikli)');
     expect(defaultTemplateNameFor(SurveyProductType.sliding, 2000), 'Sürme iki kanat');

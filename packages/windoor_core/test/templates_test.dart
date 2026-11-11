@@ -7,10 +7,26 @@ void main() {
   final templates = builtInTemplates();
 
   test('yerleşik şablon sayısı ve kategoriler', () {
-    expect(templates.length, greaterThanOrEqualTo(8));
+    expect(templates.length, greaterThanOrEqualTo(20));
     expect(templates.map((t) => t.id).toSet().length, templates.length);
+    expect(templates.any((t) => t.category == 'WINDOW'), isTrue);
     expect(templates.any((t) => t.category == 'DOOR'), isTrue);
+    expect(templates.any((t) => t.category == 'COUPLE'), isTrue);
     expect(templates.any((t) => t.category == 'SLIDING'), isTrue);
+    expect(templates.any((t) => t.category == 'SHAPED'), isTrue);
+  });
+
+  test('her şablon BOM kasa/çıta/cam veya panel içerir', () {
+    for (final t in templates) {
+      final bom = engine.run(t.build(t.defaultWidth, t.defaultHeight, '1')).bom;
+      expect(bom.any((b) => b.group == BomGroup.profile), isTrue, reason: t.name);
+      expect(bom.any((b) => b.group == BomGroup.bead), isTrue, reason: t.name);
+      expect(
+        bom.any((b) => b.group == BomGroup.glass || b.group == BomGroup.panel),
+        isTrue,
+        reason: t.name,
+      );
+    }
   });
 
   test('her şablon varsayılan ölçüde LayoutEngine + checkDesign hatasız; id benzersiz; JSON gidiş-dönüş', () {
@@ -28,7 +44,8 @@ void main() {
   test('her yerleşik şablon varsayılan ölçüde checkDesign hiç uyarı vermez', () {
     for (final t in templates) {
       final d = t.build(t.defaultWidth, t.defaultHeight, '1');
-      final issues = checkDesign(engine.run(d), series);
+      final layout = engine.run(d);
+      final issues = checkDesign(layout, series, d);
       expect(issues, isEmpty, reason: '${t.name}: ${issues.map((i) => i.message).join('; ')}');
     }
   });

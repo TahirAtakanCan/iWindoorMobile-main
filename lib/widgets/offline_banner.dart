@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 
+import '../screens/offline/sync_issues_screen.dart';
 import '../services/offline/connectivity_state.dart';
 import '../services/offline/survey_outbox.dart';
 import '../services/survey_api.dart';
-import '../screens/offline/sync_issues_screen.dart';
+import '../utils/format.dart';
 
 class OfflineBanner extends StatelessWidget {
   const OfflineBanner({super.key});
+
+  static bool get isVisible {
+    final c = ConnectivityState.instance;
+    return c.isOffline || c.pendingOutboxCount > 0;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -15,10 +21,10 @@ class OfflineBanner extends StatelessWidget {
       builder: (context, _) {
         final c = ConnectivityState.instance;
         if (c.isOnline && c.pendingOutboxCount == 0) return const SizedBox.shrink();
-        final time = c.lastOnlineAt;
-        final hh = time == null ? '—' : '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
         final parts = <String>[];
-        if (c.isOffline) parts.add('Çevrimdışı · son güncelleme $hh');
+        if (c.isOffline) {
+          parts.add('Çevrimdışı · son güncelleme ${formatLastUpdateShort(c.lastOnlineAt)}');
+        }
         if (c.pendingOutboxCount > 0) parts.add('${c.pendingOutboxCount} kayıt gönderilmeyi bekliyor');
         return Material(
           color: c.isOffline ? Colors.orange.shade800 : Colors.blueGrey.shade700,

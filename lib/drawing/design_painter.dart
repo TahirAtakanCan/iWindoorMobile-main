@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:windoor_core/windoor_core.dart';
 
+import '../theme/drawing_style.dart';
 import 'glass_look.dart';
 
 /// mm <-> ekran dönüşümü (ölçek + öteleme). Dokunmayı mm'ye çevirmek için de kullanılır.
@@ -40,7 +41,7 @@ class DesignPainter extends CustomPainter {
     this.issueIds = const {},
     this.showDimensions = true,
     this.showLabels = false,
-    this.dimColor = const Color(0xFF333333),
+    this.dimColor = DrawingStyle.dim,
     this.selectionColor = const Color(0xFFE0701A),
     this.issueColor = const Color(0xFFC62828),
   });
@@ -95,12 +96,21 @@ class DesignPainter extends CustomPainter {
           _glass(canvas, g, hair);
         case PolylinePrim l:
           final isScreen = l.layer == DrawLayer.screen;
+          final isSymbol = l.layer == DrawLayer.symbol;
+          final isShutterSlat = l.layer == DrawLayer.frame &&
+              l.pts.length == 2 &&
+              l.pts.first.y < 0 &&
+              (l.pts.first.y - l.pts.last.y).abs() < 0.01;
           final paint = _stroke(
-            isScreen ? const Color(0x59808080) : const Color(0xFF20303A),
-            (isScreen ? 0.8 : 1.3) * hair,
-          )..strokeJoin = StrokeJoin.round;
+            isScreen
+                ? DrawingStyle.screenGrid.withValues(alpha: 0.45)
+                : (isShutterSlat ? DrawingStyle.shutterLine : (isSymbol ? DrawingStyle.amber : DrawingStyle.contour)),
+            (isScreen ? 0.8 : (isSymbol ? 3.0 : 1.3)) * hair,
+          )
+            ..strokeCap = isSymbol ? StrokeCap.round : StrokeCap.butt
+            ..strokeJoin = StrokeJoin.round;
           if (l.dashed) {
-            _drawDashedPolyline(canvas, l.pts, paint, 14 / t.k, 8 / t.k);
+            _drawDashedPolyline(canvas, l.pts, paint, 9 / t.k, 6 / t.k);
           } else {
             final path = Path()..moveTo(l.pts.first.x, l.pts.first.y);
             for (final q in l.pts.skip(1)) {
@@ -109,21 +119,28 @@ class DesignPainter extends CustomPainter {
             canvas.drawPath(path, paint);
           }
         case HandlePrim h:
-          for (final (box, radius) in [(h.base, 6.0), (h.lever, 7.0)]) {
+          for (final (box, fill, radius) in [
+            (h.base, DrawingStyle.handleBase, 6.0),
+            (h.lever, DrawingStyle.amber, 7.0),
+          ]) {
             final rr = RRect.fromLTRBR(box.l, box.t, box.r, box.b, Radius.circular(radius));
-            canvas.drawRRect(rr, Paint()..color = color.hardware);
-            canvas.drawRRect(rr, _stroke(const Color(0xFF3A4146), hair));
+            canvas.drawRRect(rr, Paint()..color = fill);
+            canvas.drawRRect(rr, _stroke(DrawingStyle.contour, hair));
           }
           if (h.lock != null) {
             final lock = h.lock!;
             final rr = RRect.fromLTRBR(lock.l, lock.t, lock.r, lock.b, Radius.circular(lock.w / 2));
-            canvas.drawRRect(rr, Paint()..color = color.hardware);
-            canvas.drawRRect(rr, _stroke(const Color(0xFF3A4146), hair));
+            canvas.drawRRect(rr, Paint()..color = DrawingStyle.lockDot);
+            canvas.drawRRect(rr, _stroke(DrawingStyle.contour, hair * .8));
           }
         case TextPrim tp:
-          if (showLabels && tp.text.isNotEmpty) {
-            _text(canvas, tp.text, Offset(tp.at.x, tp.at.y), math.max(designW, designH) / 52,
-                const Color(0xB31F3A4D), center: true);
+          if (tp.text.isEmpty) break;
+          final slide = tp.text.toUpperCase().contains('SABİT') || tp.text == 'Sabit';
+          if (slide || showLabels) {
+            final fs = math.max(designW, designH) / 52;
+            final col = slide ? DrawingStyle.slideLabel : dimColor.withValues(alpha: .7);
+            final fw = slide ? FontWeight.w700 : FontWeight.w500;
+            _text(canvas, tp.text, Offset(tp.at.x, tp.at.y), fs, col, center: true, fontWeight: fw);
           }
       }
     }
@@ -160,60 +177,37 @@ class DesignPainter extends CustomPainter {
     c.drawPath(dashed, _stroke(col, w));
   }
 
-  // --- profil (kasa / kanat / çıta): dolgu + kenar + yön gölgesi ---
-  static const _sashShade = {ProfileSide.top: 0.0, ProfileSide.left: .04, ProfileSide.right: .10, ProfileSide.bottom: .15};
-  static const _beadShade = {ProfileSide.top: .16, ProfileSide.left: .10, ProfileSide.right: .03, ProfileSide.bottom: 0.0};
-
   void _profile(Canvas c, ProfilePoly p, double hair) {
     final path = Path()..addPolygon(p.pts.map((q) => Offset(q.x, q.y)).toList(), true);
-    c.drawPath(path, Paint()..color = color.fill);
-    final shade = (p.layer == DrawLayer.bead ? _beadShade : _sashShade)[p.side]!;
-    if (shade > 0) c.drawPath(path, Paint()..color = Colors.black.withValues(alpha: shade));
-    if (color.woodGrain && p.layer != DrawLayer.bead) {
-      c.save();
-      c.clipPath(path);
-      final bounds = path.getBounds();
-      final grain = _stroke(Colors.black.withValues(alpha: .12), hair);
-      for (var x = bounds.left; x < bounds.right; x += 7) {
-        c.drawLine(Offset(x, bounds.top), Offset(x + bounds.height * .08, bounds.bottom), grain);
-      }
-      c.restore();
-    }
-    c.drawPath(path, _stroke(color.stroke, hair)..strokeJoin = StrokeJoin.round); // gönye çizgisi buradan gelir
+    final fill = DrawingStyle.bevelTone(color, p.side, bead: p.layer == DrawLayer.bead);
+    c.drawPath(path, Paint()..color = fill);
+    c.drawPath(path, _stroke(DrawingStyle.contour, 1.2 * hair)..strokeJoin = StrokeJoin.miter);
   }
+
+  bool _isShutterBox(BarRect b) => b.metallic && b.box.t < 0 && b.box.b <= 0.5;
+  bool _isShutterRail(BarRect b) => b.metallic && b.box.t < 0 && b.box.b > 0.5;
 
   void _bar(Canvas c, BarRect b, double hair) {
     final r = Rect.fromLTRB(b.box.l, b.box.t, b.box.r, b.box.b);
-    if (b.metallic) {
-      c.drawRect(
-        r,
-        Paint()
-          ..shader = const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFB0B6BC), Color(0xFF7A828A), Color(0xFF9AA1A8)],
-          ).createShader(r),
-      );
+    final tones = DrawingStyle.bevelForProfile(color);
+    late final Color fill;
+    if (_isShutterBox(b)) {
+      fill = DrawingStyle.shutterBox;
+    } else if (_isShutterRail(b)) {
+      fill = DrawingStyle.shutterRail;
+    } else if (b.metallic) {
+      fill = DrawingStyle.threshold;
+    } else if (b.layer == DrawLayer.mullion || b.layer == DrawLayer.adapter || b.layer == DrawLayer.coupling) {
+      fill = tones[0];
+    } else if (b.layer == DrawLayer.bead && r.height < 25) {
+      fill = DrawingStyle.sill;
+    } else if (b.layer == DrawLayer.frame && b.box.h < 30 && b.box.w > b.box.h * 3) {
+      fill = DrawingStyle.sill;
     } else {
-      c.drawRect(r, Paint()..color = color.fill);
-      if (b.dir != null) {
-        final v = b.dir == SplitDir.v;
-        final shadow = v
-            ? Rect.fromLTRB(r.left + r.width * .62, r.top, r.right, r.bottom)
-            : Rect.fromLTRB(r.left, r.top + r.height * .62, r.right, r.bottom);
-        c.drawRect(shadow, Paint()..color = Colors.black.withValues(alpha: .08));
-      }
-      if (color.woodGrain) {
-        c.save();
-        c.clipRect(r);
-        final grain = _stroke(Colors.black.withValues(alpha: .12), hair);
-        for (var x = r.left; x < r.right; x += 7) {
-          c.drawLine(Offset(x, r.top), Offset(x + r.height * .08, r.bottom), grain);
-        }
-        c.restore();
-      }
+      fill = tones[0];
     }
-    c.drawRect(r, _stroke(color.stroke, hair));
+    c.drawRect(r, Paint()..color = fill);
+    c.drawRect(r, _stroke(DrawingStyle.contour, 1.2 * hair));
   }
 
   void _drawDashedPolyline(Canvas c, List<Pt> pts, Paint paint, double dash, double gap) {
@@ -255,35 +249,33 @@ class DesignPainter extends CustomPainter {
     }
 
     if (look.panel) {
-      fillGlass(Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: look.gradient,
-        ).createShader(r));
+      fillGlass(Paint()..color = DrawingStyle.panelFill);
       c.save();
       if (clipPath != null) {
         c.clipPath(clipPath);
       } else {
         c.clipRect(r);
       }
-      for (var y = r.top + 60; y < r.bottom; y += 60) {
-        c.drawLine(Offset(r.left, y), Offset(r.right, y), _stroke(const Color(0xFF9AA3A9), hair));
+      for (var y = r.top + 22; y < r.bottom; y += 22) {
+        c.drawLine(Offset(r.left, y), Offset(r.right, y), _stroke(DrawingStyle.panelLine, hair));
       }
       c.restore();
       if (clipPath != null) {
-        c.drawPath(clipPath, _stroke(color.stroke, hair));
+        c.drawPath(clipPath, _stroke(DrawingStyle.contour, hair));
       } else {
-        c.drawRect(r, _stroke(color.stroke, hair));
+        c.drawRect(r, _stroke(DrawingStyle.contour, hair));
       }
       return;
     }
 
+    final grad = look.gradient.length >= 2
+        ? look.gradient
+        : [DrawingStyle.glassStart, DrawingStyle.glassEnd];
     fillGlass(Paint()
       ..shader = LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: look.gradient,
+        colors: grad,
       ).createShader(r));
 
     c.save();
@@ -301,8 +293,8 @@ class DesignPainter extends CustomPainter {
           Offset(r.left + (a + t) * r.width + k, r.top),
           Offset(r.left + a * r.width + k, r.top),
         ], true);
-      c.drawPath(band(.08, .16), Paint()..color = Colors.white.withValues(alpha: look.reflection));
-      c.drawPath(band(.30, .05), Paint()..color = Colors.white.withValues(alpha: look.reflection * .8));
+      c.drawPath(band(.08, .16), Paint()..color = Colors.white.withValues(alpha: 0.30));
+      c.drawPath(band(.30, .05), Paint()..color = Colors.white.withValues(alpha: 0.22));
     }
     if (look.frosted) {
       // satina/buzlu: sabit tohumlu nokta dokusu (her çizimde aynı görünsün)
@@ -348,9 +340,9 @@ class DesignPainter extends CustomPainter {
     }
     c.restore();
     if (clipPath != null) {
-      c.drawPath(clipPath, _stroke(const Color(0xFF5F8AA6), .8 * hair));
+      c.drawPath(clipPath, _stroke(DrawingStyle.glassStroke, .8 * hair));
     } else {
-      c.drawRect(r, _stroke(const Color(0xFF5F8AA6), .8 * hair));
+      c.drawRect(r, _stroke(DrawingStyle.glassStroke, .8 * hair));
     }
   }
 
@@ -394,10 +386,8 @@ class DesignPainter extends CustomPainter {
     for (final x in v) {
       if (horiz) {
         line(x, off - t * 2, x, off + t * 2);
-        line(x - t, off + t, x + t, off - t);
       } else {
         line(off - t * 2, x, off + t * 2, x);
-        line(off - t, x + t, off + t, x - t);
       }
     }
     for (var i = 0; i < v.length - 1; i++) {
@@ -415,9 +405,10 @@ class DesignPainter extends CustomPainter {
     }
   }
 
-  void _text(Canvas c, String text, Offset at, double fs, Color col, {bool center = false, bool above = false}) {
+  void _text(Canvas c, String text, Offset at, double fs, Color col,
+      {bool center = false, bool above = false, FontWeight fontWeight = FontWeight.w600}) {
     final tp = TextPainter(
-      text: TextSpan(text: text, style: TextStyle(fontSize: fs, color: col, fontWeight: FontWeight.w500)),
+      text: TextSpan(text: text, style: TextStyle(fontSize: fs, color: col, fontWeight: fontWeight)),
       textDirection: TextDirection.ltr,
     )..layout();
     final dy = center ? -tp.height / 2 : (above ? -tp.height : 0.0);

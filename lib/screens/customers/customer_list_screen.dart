@@ -111,65 +111,67 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
         icon: const Icon(Icons.add),
         label: const Text('Yeni'),
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: TextField(
-              controller: _q,
-              decoration: InputDecoration(
-                hintText: 'Ad veya telefon ara…',
-                prefixIcon: const Icon(Icons.search),
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
+      body: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: TextField(
+                controller: _q,
+                decoration: InputDecoration(
+                  hintText: 'Ad veya telefon ara…',
+                  prefixIcon: const Icon(Icons.search),
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
+                ),
+                onSubmitted: (_) => _load(),
               ),
-              onSubmitted: (_) => _load(),
             ),
           ),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _error != null
-                    ? Center(child: Text(_error!))
-                    : _items.isEmpty
-                        ? const Center(child: Text('Müşteri yok.'))
-                        : ListView.separated(
-                            itemCount: _items.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1),
-                            itemBuilder: (_, i) {
-                              final c = _items[i];
-                              return ListTile(
-                                title: Text(c.name),
-                                subtitle: Text([
-                                  if ((c.phone ?? '').isNotEmpty) c.phone!,
-                                  '${c.projectCount} proje',
-                                  if (c.balanceTotal > 0) 'Bakiye ${formatMoney(c.balanceTotal)}',
-                                ].join(' · ')),
-                                trailing: (c.phone ?? '').isNotEmpty
-                                    ? IconButton(
-                                        icon: const Icon(Icons.copy),
-                                        tooltip: 'Telefonu kopyala',
-                                        onPressed: () async {
-                                          await Clipboard.setData(ClipboardData(text: c.phone!));
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(content: Text('Telefon kopyalandı.')),
-                                            );
-                                          }
-                                        },
-                                      )
-                                    : null,
-                                onTap: () async {
-                                  await Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (_) => CustomerDetailScreen(customerId: c.id)),
-                                  );
-                                  _load();
-                                },
+          if (_loading)
+            const SliverFillRemaining(hasScrollBody: false, child: Center(child: CircularProgressIndicator()))
+          else if (_error != null)
+            SliverFillRemaining(hasScrollBody: false, child: Center(child: Text(_error!)))
+          else if (_items.isEmpty)
+            const SliverFillRemaining(hasScrollBody: false, child: Center(child: Text('Müşteri yok.')))
+          else
+            SliverList.separated(
+              itemCount: _items.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (_, i) {
+                final c = _items[i];
+                return ListTile(
+                  title: Text(c.name),
+                  subtitle: Text([
+                    if ((c.phone ?? '').isNotEmpty) c.phone!,
+                    '${c.projectCount} proje',
+                    if (c.balanceTotal > 0) 'Bakiye ${formatMoney(c.balanceTotal)}',
+                  ].join(' · ')),
+                  trailing: (c.phone ?? '').isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.copy),
+                          tooltip: 'Telefonu kopyala',
+                          onPressed: () async {
+                            await Clipboard.setData(ClipboardData(text: c.phone!));
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Telefon kopyalandı.')),
                               );
-                            },
-                          ),
-          ),
+                            }
+                          },
+                        )
+                      : null,
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => CustomerDetailScreen(customerId: c.id)),
+                    );
+                    _load();
+                  },
+                );
+              },
+            ),
+          const SliverToBoxAdapter(child: SizedBox(height: 88)),
         ],
       ),
     );

@@ -28,11 +28,24 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       builder: (context, child) {
-        return Column(
-          children: [
-            const OfflineBanner(),
-            Expanded(child: child ?? const SizedBox.shrink()),
-          ],
+        return AnimatedBuilder(
+          animation: ConnectivityState.instance,
+          builder: (context, _) {
+            final content = child ?? const SizedBox.shrink();
+            // Şerit SafeArea ile status bar'ı kaplar; altındaki Scaffold'a üst padding'i tekrar verme.
+            // Ağaç yapısı hep aynı kalmalı: koşullu sarmalama Navigator'ı yeniden kurup açık ekranları sıfırlar.
+            final body = MediaQuery.removePadding(
+              context: context,
+              removeTop: OfflineBanner.isVisible,
+              child: content,
+            );
+            return Column(
+              children: [
+                const OfflineBanner(),
+                Expanded(child: body),
+              ],
+            );
+          },
         );
       },
       home: const _Bootstrap(),

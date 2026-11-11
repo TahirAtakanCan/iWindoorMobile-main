@@ -44,7 +44,7 @@ class GlassLook {
   const GlassLook(this.gradient,
       {this.reflection = .38, this.frosted = false, this.patterned = false, this.laminated = false, this.panel = false});
 
-  static const clear = GlassLook([Color(0xFFE3F3FC), Color(0xFFB6DEF5), Color(0xFF8EC7EA)]);
+  static const clear = GlassLook([Color(0xFFD4F1F1), Color(0xFF7FC6CB)]);
   static const lowe = GlassLook([Color(0xFFE2F5EF), Color(0xFFB5E1D6), Color(0xFF8CCBBD)]);
   static const smoke = GlassLook([Color(0xFFB9C3C9), Color(0xFF8D9AA2), Color(0xFF6C7A83)]);
   static const bronze = GlassLook([Color(0xFFE2C9A4), Color(0xFFBF9A6C), Color(0xFF9C774B)]);
@@ -52,7 +52,7 @@ class GlassLook {
   static const frost = GlassLook([Color(0xFFEEF5F9), Color(0xFFD5E3EB)], reflection: 0, frosted: true);
   static const pattern = GlassLook([Color(0xFFE6F3FA), Color(0xFFC3DFEE)], reflection: 0, patterned: true);
   static const lam = GlassLook([Color(0xFFE3F3FC), Color(0xFFB2DBF3), Color(0xFF86C0E6)], laminated: true);
-  static const panelLook = GlassLook([Color(0xFFF1F2F3), Color(0xFFD9DCDE)], reflection: 0, panel: true);
+  static const panelLook = GlassLook([Color(0xFFF1F4F4), Color(0xFFF1F4F4)], reflection: 0, panel: true);
 
   static const styles = <String, String>{
     'clear': 'Şeffaf',
@@ -84,7 +84,7 @@ class GlassLook {
         height: size,
         decoration: BoxDecoration(
           gradient: LinearGradient(colors: gradient, begin: Alignment.topLeft, end: Alignment.bottomRight),
-          border: Border.all(color: const Color(0xFF5F8AA6), width: .8),
+          border: Border.all(color: const Color(0xFF2F5D66), width: .8),
           borderRadius: BorderRadius.circular(3),
         ),
       );

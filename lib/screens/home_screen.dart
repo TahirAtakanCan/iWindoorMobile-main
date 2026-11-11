@@ -479,48 +479,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         project.status == ProjectStatus.installation ||
                         project.status == ProjectStatus.delivered;
                     return Card(
-                      elevation: 3,
-                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      elevation: 1.5,
+                      margin: const EdgeInsets.symmetric(vertical: 6),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.all(15),
-                        leading: CircleAvatar(
-                          backgroundColor: project.status.color.withValues(alpha: 0.2),
-                          child: Text(project.name.isNotEmpty ? project.name[0].toUpperCase() : "?"),
-                        ),
-                        title: Row(
-                          children: [
-                            Expanded(child: Text(project.name, style: const TextStyle(fontWeight: FontWeight.bold))),
-                            if (_offlineIds.contains(project.id))
-                              const Padding(
-                                padding: EdgeInsets.only(right: 6),
-                                child: Icon(Icons.offline_pin, size: 18, color: Colors.teal),
-                              ),
-                            StatusBadge(status: project.status, compact: true),
-                          ],
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(project.description),
-                            const SizedBox(height: 4),
-                            Text(
-                              "${project.windowUnits.length} Pencere",
-                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                            ),
-                            if (project.deliveryDate != null)
-                              Text('Teslim: ${formatDate(project.deliveryDate)}', style: const TextStyle(fontSize: 12)),
-                            if (approved && project.balance > 0)
-                              Text(
-                                'Kalan: ${formatMoney(project.balance)}',
-                                style: const TextStyle(fontSize: 12, color: Colors.orange, fontWeight: FontWeight.w600),
-                              ),
-                          ],
-                        ),
-                        trailing: Text(
-                          formatMoney(project.displaySaleTotal),
-                          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 15),
-                        ),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
                         onTap: () async {
                           await Navigator.push(
                             context,
@@ -530,6 +493,79 @@ class _HomeScreenState extends State<HomeScreen> {
                           );
                           _refreshAll();
                         },
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  CircleAvatar(
+                                    radius: 18,
+                                    backgroundColor: project.status.color.withValues(alpha: 0.18),
+                                    child: Text(
+                                      project.name.isNotEmpty ? project.name[0].toUpperCase() : '?',
+                                      style: const TextStyle(color: Brand.petrol, fontWeight: FontWeight.w700),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      project.name,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Brand.ink),
+                                    ),
+                                  ),
+                                  if (_offlineIds.contains(project.id))
+                                    const Padding(
+                                      padding: EdgeInsets.only(left: 6, top: 2),
+                                      child: Icon(Icons.offline_pin, size: 18, color: Brand.petrolLight),
+                                    ),
+                                  const SizedBox(width: 6),
+                                  StatusBadge(status: project.status, compact: true),
+                                ],
+                              ),
+                              if (project.description.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 48, top: 4),
+                                  child: Text(
+                                    project.description,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(color: Colors.grey[700]),
+                                  ),
+                                ),
+                              Padding(
+                                padding: const EdgeInsets.only(left: 48, top: 6),
+                                child: Text(
+                                  [
+                                    '${project.windowUnits.length} pencere',
+                                    if (project.deliveryDate != null) 'Teslim ${formatDate(project.deliveryDate)}',
+                                  ].join(' · '),
+                                  style: TextStyle(fontSize: 12.5, color: Colors.grey[600]),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  const SizedBox(width: 48),
+                                  if (approved && project.balance > 0)
+                                    Text(
+                                      'Kalan ${formatMoney(project.balance)}',
+                                      style: const TextStyle(fontSize: 12.5, color: Brand.amberDark, fontWeight: FontWeight.w600),
+                                    ),
+                                  const Spacer(),
+                                  Text(
+                                    formatMoney(project.displaySaleTotal),
+                                    style: const TextStyle(fontWeight: FontWeight.w800, color: Brand.petrol, fontSize: 16),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     );
                   }),
